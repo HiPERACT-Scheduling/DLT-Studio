@@ -59,7 +59,7 @@ target_link_libraries(dls PRIVATE dls_util)
 add_executable(dls-bench bench/bench_main.cpp)
 target_link_libraries(dls-bench PRIVATE dls_util)
 
-add_executable(hello_dls examples/hello_dls.cpp)
+add_executable(hello_dls ../examples/cpp/hello_dls.cpp)
 target_link_libraries(hello_dls PRIVATE dls_util)
 
 # ---- optional HiGHS LP/MILP backend ---------------------------------------
@@ -78,7 +78,7 @@ if(DLS_WITH_HIGHS)
   target_link_libraries(dls PRIVATE dls_highs)
   target_link_libraries(dls-bench PRIVATE dls_highs)
 
-  add_executable(portfolio_compare examples/portfolio_compare.cpp)
+  add_executable(portfolio_compare ../examples/cpp/portfolio_compare.cpp)
   target_link_libraries(portfolio_compare PRIVATE dls_highs dls_util)
 endif()
 
