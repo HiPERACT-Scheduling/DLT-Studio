@@ -59,6 +59,9 @@ target_link_libraries(dls PRIVATE dls_util)
 add_executable(dls-bench bench/bench_main.cpp)
 target_link_libraries(dls-bench PRIVATE dls_util)
 
+add_executable(hello_dls examples/hello_dls.cpp)
+target_link_libraries(hello_dls PRIVATE dls_util)
+
 # ---- optional HiGHS LP/MILP backend ---------------------------------------
 option(DLS_WITH_HIGHS "Build the optional HiGHS LP backend" OFF)
 if(DLS_WITH_HIGHS)
