@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // mlsd/mlsd_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Exact MLSD solver: enumerate permutation-schedule structures (task execution
 // order x per-task ordered processor subsets), evaluate each with the MLSD LP,

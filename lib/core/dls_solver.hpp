@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/dls_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // The top-level contract every algorithm implements, exact or heuristic.
 // This is the uniform interface: a caller (CLI driver, benchmark harness,

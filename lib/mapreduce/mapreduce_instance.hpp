@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // mapreduce/mapreduce_instance.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Problem definition for scheduling MapReduce computations as a divisible load
 // (Berlińska thesis, chapter 4). This is the third problem class in the

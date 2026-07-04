@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/milp/mlsd_milp_solver.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // HiGHS MILP for MLSD (see the header). One MILP per task order decides the
 // per-task processor slot assignment and the load fractions; the n! orders are

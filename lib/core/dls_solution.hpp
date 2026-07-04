@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/dls_solution.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Uniform result type returned by every DLS solver and by the schedule
 // evaluator. It describes *what* schedule was found, not *how*.

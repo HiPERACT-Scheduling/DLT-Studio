@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // engines/highs/highs_lp_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Generic "minimize objective·x subject to rows·x <= rhs, x >= 0" LP solved by
 // HiGHS. Declaration only (no HiGHS headers); the implementation is compiled

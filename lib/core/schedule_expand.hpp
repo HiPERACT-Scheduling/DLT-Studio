@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/schedule_expand.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Fill in the full per-installment timing of a solved schedule so it can be
 // drawn (e.g. a Gantt chart) or inspected by a front-end.

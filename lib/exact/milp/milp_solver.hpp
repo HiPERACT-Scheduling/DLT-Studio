@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/milp/milp_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Optional exact DLS solver that formulates the WHOLE single-installment
 // problem — processor selection, activation order, and loads — as one mixed-

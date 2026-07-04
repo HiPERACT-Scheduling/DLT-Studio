@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // heuristics/online/online_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // OnlineSolver: the online, simulation-based heuristics of Marszałkowski (2020),
 // "Scheduling divisible computations with energy constraints", §6.2. Unlike every

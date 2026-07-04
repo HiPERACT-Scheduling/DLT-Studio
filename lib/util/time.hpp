@@ -1,3 +1,8 @@
+//---------------------------------------------------------------------------
+// util/time.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
+//---------------------------------------------------------------------------
+
 #ifndef DLS_UTIL_TIME_H
 #define DLS_UTIL_TIME_H
 

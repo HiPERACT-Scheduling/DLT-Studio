@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/milp/mlsd_milp_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Exact MLSD solver via mixed-integer linear programming (HiGHS), an INDEPENDENT
 // check on the brute-force MlsdSolver enumerator. For a fixed task order it lets

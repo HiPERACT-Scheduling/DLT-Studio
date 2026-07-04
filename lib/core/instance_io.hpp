@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/instance_io.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Text reader/writer for a DLSInstance, exposing the *full* model (not just the
 // legacy S/C/A/B columns) in a backward-compatible, line-oriented format.

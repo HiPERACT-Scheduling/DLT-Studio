@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // bench/bench_main.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Command-line front-end for the benchmark harness (bench/benchmark.hpp). It
 // generates random DLS instances and compares the makespan-minimizing solvers

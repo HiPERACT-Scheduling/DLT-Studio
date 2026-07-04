@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // cli/dls_main.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Uniform command-line front-end for the single-load DLS solver portfolio. It
 // selects any registered solver by name (core/solver_registry.hpp) and runs it

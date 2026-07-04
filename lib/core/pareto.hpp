@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/pareto.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Time–energy trade-off front (Marszałkowski 2020): for a fixed activation
 // order, how low can the energy go if the makespan is capped at T̄? Sweeping the

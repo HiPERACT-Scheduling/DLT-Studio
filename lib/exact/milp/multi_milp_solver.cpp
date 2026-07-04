@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/milp/multi_milp_solver.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // HiGHS MILP for the multi-installment DLS makespan problem. See the header for
 // scope. The schedule is K port slots; a processor may occupy several. Per-slot

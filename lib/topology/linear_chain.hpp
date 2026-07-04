@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // topology/linear_chain.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Divisible load on a LINEAR DAISY CHAIN P0 — P1 — ... — P_{N-1} (a non-star
 // topology). The whole load V originates at P0; each processor keeps a share αᵢ

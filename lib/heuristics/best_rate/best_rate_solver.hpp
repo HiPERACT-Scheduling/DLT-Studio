@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // heuristics/best_rate/best_rate_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // BestRateSolver: the "best rate" constructive heuristic from Berlińska's
 // thesis (section 3.5.4), exposed through the uniform dls::DLSSolver contract.

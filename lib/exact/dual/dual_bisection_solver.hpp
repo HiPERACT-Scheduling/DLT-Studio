@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/dual/dual_bisection_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // A genuinely different exact method for the single-load makespan, used mainly
 // as an INDEPENDENT cross-check on the primal solvers (B&B, MILP). Instead of

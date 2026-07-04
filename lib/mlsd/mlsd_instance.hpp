@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // mlsd/mlsd_instance.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Types for the MLSD problem (Multiple Loads, Single Distribution): n divisible
 // tasks of sizes V_j scheduled on m processors over a single-port star, in a

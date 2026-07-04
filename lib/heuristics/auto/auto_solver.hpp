@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // heuristics/auto/auto_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // AutoSolver: a meta-solver that inspects a single-load instance and delegates
 // to whichever portfolio solver fits its features best, so a caller who doesn't

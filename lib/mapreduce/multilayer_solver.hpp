@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // mapreduce/multilayer_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Multilayer divisible applications (Berlińska thesis, chapter 5): a generalized
 // MapReduce with one mapper layer feeding R >= 1 reducer layers in a pipeline.

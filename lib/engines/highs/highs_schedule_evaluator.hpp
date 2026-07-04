@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // engines/highs/highs_schedule_evaluator.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Optional ScheduleEvaluator backend that solves the DLS per-sequence LP with
 // the external HiGHS solver. It solves the SAME model as the CSimplex backend

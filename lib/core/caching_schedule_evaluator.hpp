@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/caching_schedule_evaluator.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // A ScheduleEvaluator decorator that memoizes results by activation sequence.
 // Because the underlying LP is deterministic, evaluating the same sequence

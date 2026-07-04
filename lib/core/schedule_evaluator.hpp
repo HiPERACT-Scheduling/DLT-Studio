@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/schedule_evaluator.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Shared machinery: given a DLS instance and a FIXED activation sequence,
 // compute the optimal load fragmentation and the resulting makespan.

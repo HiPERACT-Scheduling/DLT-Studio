@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/json_io.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Minimal, dependency-free JSON *emitters* for the DLS contract — the stable
 // serialization a front-end (web app, notebook, desktop GUI) consumes. Only the

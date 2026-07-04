@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // engines/highs/highs_schedule_evaluator.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // HiGHS-backed implementation of the DLS per-sequence LP. Builds the shared
 // model (core/dls_lp_model.hpp) as a HiGHS LP — all variables non-negative,

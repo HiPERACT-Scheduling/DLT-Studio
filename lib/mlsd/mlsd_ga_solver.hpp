@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // mlsd/mlsd_ga_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Genetic-algorithm heuristic for MLSD. A genome IS an MlsdStructure (task order
 // + per-task processor sequences); fitness is the LP makespan from the

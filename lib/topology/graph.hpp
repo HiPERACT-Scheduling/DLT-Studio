@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // topology/graph.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Divisible load on a GENERAL GRAPH (mesh / arbitrary network) — the most
 // general regime-2 topology. The load originates at a source node and must reach

@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // util/random.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Injectable random-number generator shared across the library. Wrapping
 // std::mt19937_64 (instead of the global rand()/srand) makes every stochastic

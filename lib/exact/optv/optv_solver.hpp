@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/optv/optv_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // OptVSolver: the OptV ("how much load fits in a deadline?") direction of DLS,
 // the dual of the usual makespan minimization (Berlińska thesis, ch. 2). Given

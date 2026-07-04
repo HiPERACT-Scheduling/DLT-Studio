@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // engines/highs/highs_lp_solver.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // HiGHS implementation of the generic LP solve (see highs_lp_solver.hpp).
 //---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // mapreduce/mapreduce_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Exact closed-form scheduler for MapReduce divisible loads (Berlińska thesis,
 // section 4.4.1 single reducer / 4.4.2 "first method" for many reducers).

@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/evaluator_factory.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Runtime selection of a ScheduleEvaluator backend by name. This is the seam
 // that lets solvers switch between the built-in CSimplex backend and optional

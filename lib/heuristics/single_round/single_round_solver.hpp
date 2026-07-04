@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // heuristics/single_round/single_round_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // SingleRoundSolver: the classical closed-form divisible-load algorithm for a
 // single distribution round on a single-port star. Every participating

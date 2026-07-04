@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/simplex_lp_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Thin helper that solves a backend-neutral LP (objective + "coeffs·x <= rhs"
 // rows) with the dependency-free CSimplex, returning a uniform result. It is the

@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/solver_registry.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // A by-name registry for the single-load DLS solver portfolio. It ties the
 // growing set of dls::DLSSolver implementations together behind one factory, so

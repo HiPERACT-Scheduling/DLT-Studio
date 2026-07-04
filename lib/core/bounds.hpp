@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/bounds.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Cheap, closed-form bounds on the optimum makespan of a DLS instance. These
 // are O(N) to compute (no LP, no search) and are useful as a quality reference

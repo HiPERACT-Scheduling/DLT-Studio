@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/dls_lp_model.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Backend-neutral builder for the DLS per-sequence linear program. Given an
 // instance and a FIXED activation sequence, buildDlsLp() produces the LP as a

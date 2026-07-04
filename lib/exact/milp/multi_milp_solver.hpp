@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/milp/multi_milp_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Exact MULTI-installment DLS solver as a single mixed-integer linear program
 // (HiGHS). Where MilpSolver allows each processor at most once, this lets a

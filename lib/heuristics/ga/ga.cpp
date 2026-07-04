@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // heuristics/ga/ga.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Thin command-line driver for the genetic-algorithm DLS solver. It parses
 // the three legacy input files, converts them into the uniform core types

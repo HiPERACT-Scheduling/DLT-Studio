@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/energy_model.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Energy as a first-class scheduling criterion, after Marszałkowski (2020),
 // "Scheduling divisible computations with energy constraints" (Poznań UT).

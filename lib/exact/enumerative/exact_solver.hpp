@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/enumerative/exact_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // ExactSolver: a provably-optimal DLS solver exposed through the uniform
 // dls::DLSSolver contract. It branch-and-bounds over activation SEQUENCES and

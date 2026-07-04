@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/simplex_schedule_evaluator.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Concrete ScheduleEvaluator backed by the legacy CSimplex LP solver
 // (core/simplex.h). Given a DLS instance and a FIXED activation sequence,

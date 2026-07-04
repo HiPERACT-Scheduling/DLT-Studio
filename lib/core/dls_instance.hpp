@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/dls_instance.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Problem definition for Divisible Load Scheduling (DLS).
 //

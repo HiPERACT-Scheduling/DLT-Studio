@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // heuristics/ga/ga_solver.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // GASolver: the genetic-algorithm heuristic exposed through the uniform
 // dls::DLSSolver contract. A caller hands it a DLSInstance plus shared

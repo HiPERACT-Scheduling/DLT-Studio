@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // cli/class_io.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Text readers for the three non-single-load problem classes, so the `dls` CLI
 // can drive all four classes with `--class=`. Each format is line-oriented with

@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // core/homogeneous.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Closed-form analysis of a HOMOGENEOUS single-port star: m identical
 // processors, each with the same startup S, communication rate C, computation

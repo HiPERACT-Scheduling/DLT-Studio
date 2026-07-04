@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // bench/benchmark.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // A small benchmarking harness for the single-load DLS solver portfolio. It
 // generates random instances in the style of the divisible-load literature

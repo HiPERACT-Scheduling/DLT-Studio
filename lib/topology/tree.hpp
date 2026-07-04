@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // topology/tree.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // Divisible load on a MULTI-LEVEL TREE — the natural generalization of both the
 // single-level star (this library's base topology) and the linear daisy chain.

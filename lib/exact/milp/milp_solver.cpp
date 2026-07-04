@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // exact/milp/milp_solver.cpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // HiGHS MILP implementation of the single-installment DLS problem. Builds one
 // MILP over processor-to-slot assignment binaries, loads, and timing, and

@@ -1,5 +1,6 @@
 //---------------------------------------------------------------------------
 // mlsd/mlsd_evaluator.hpp
+// https://github.com/HiPERACT-Scheduling/DLT-Studio
 //
 // For a FIXED MLSD structure (task order + per-task processor sequences), the
 // optimal load fractions alpha_{i,j} are a linear program — the analogue of the
