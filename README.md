@@ -193,8 +193,8 @@ compiler. HiGHS is downloaded and built automatically by vcpkg when
 
 MIT License — see [LICENSE](LICENSE) for the full text.
 
-Copyright (c) 2024-2026 Marcin Lawenda (Poznan Supercomputing and Networking Center)
-and Maciej Drozdowski (Institute of Computing Science, Poznan University of Technology)
+Copyright (c) 2024-2026 Maciej Drozdowski (Institute of Computing Science, Poznan University of Technology)
+and Marcin Lawenda (Poznan Supercomputing and Networking Center)
 
 ---
 
