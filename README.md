@@ -189,6 +189,14 @@ compiler. HiGHS is downloaded and built automatically by vcpkg when
 
 ---
 
+## License
+
+MIT License — see [LICENSE](LICENSE) for the full text.
+
+Copyright (c) 2023-2026 Marcin Lawenda, Poznan Supercomputing and Networking Center
+
+---
+
 ## Documentation
 
 | File | Contents |
