@@ -115,6 +115,13 @@ Build options: `-DDLS_WITH_HIGHS=ON` enables the HiGHS backend;
 
 ### C++ (direct library)
 
+Build and run:
+
+```bash
+cmake -B build && cmake --build build --target hello_dls
+./build/bin/hello_dls
+```
+
 ```cpp
 #include "core/dls_instance.hpp"
 #include "heuristics/auto/auto_solver.hpp"
@@ -136,10 +143,27 @@ expandSchedule(inst, sol);   // fills commStart / computeStart / computeFinish
 // sol.makespan, sol.fragments[i].{proc, load, computeStart, computeFinish}
 ```
 
+### C (via C binding)
+
+Build and run:
+
+```bash
+cmake -B build && cmake --build build --target dls_c
+gcc examples/c/hello_dls.c -ldl -o hello_dls_c
+DLS_LIB=build/bin/libdls_c.so ./hello_dls_c
+```
+
 ### Python (via C binding)
 
+Build the binding, then run without any pip installs:
+
+```bash
+cmake -B build && cmake --build build --target dls_c
+DLS_LIB=build/bin/libdls_c.so python examples/python/hello_dls.py
+```
+
 ```python
-import ctypes, json, glob
+import ctypes, json
 
 lib = ctypes.CDLL("build/bin/libdls_c.so")
 lib.dls_solve.restype  = ctypes.c_void_p
