@@ -11,6 +11,9 @@ lib/        the C++ library: solvers, CLIs, tests, LP engines
 docs/       reference documentation
 ```
 
+The library powers the **DLT Portal** — a web-based solver interface available at
+[sorbaria-209.man.poznan.pl](https://sorbaria-209.man.poznan.pl).
+
 ---
 
 ## What is Divisible Load Theory?
