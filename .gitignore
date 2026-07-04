@@ -1,0 +1,33 @@
+# Build output directories
+build/
+build-*/
+
+# Portal (not part of this repo)
+frontend/
+
+# Operations / deployment
+deploy/
+backup/
+
+# References / scratch
+references/
+google*.html
+
+# vcpkg artifacts (submodule source is tracked; build artifacts are not)
+lib/vcpkg/buildtrees/
+lib/vcpkg/packages/
+lib/vcpkg/downloads/
+lib/vcpkg/.binarycache/
+
+# Compiled outputs
+*.so
+*.a
+*.o
+*.d
+
+# IDE / OS
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+.DS_Store

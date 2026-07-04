@@ -1,0 +1,23 @@
+Najlepsze rozwiazanie!!!
+
+Cmax = 140577.960873
+
+Rozmiary niezerowych paczek:
+x1 = 279080.590083
+x2 = 304450.643727
+x3 = 332127.065884
+x4 = 41501.947769
+x5 = 42839.752536
+
+Uszeregowanie (nr paczki -> nr procesora):
+1->1  2->1  3->1  4->3  5->3  
+
+Liczba dystrybucji: 5
+Wykorzystane procesory:
+1; 3; 
+
+Nr populacji: 1
+Ile razy poprawiano rozwiazanie: 1
+Liczba genow w populacji: 0
+
+=============================================================================

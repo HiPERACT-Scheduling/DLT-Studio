@@ -1,0 +1,8 @@
+iMaxProcNum	3
+iProcPar	3
+iChroLength	5
+iPopulSize	10
+iSolMaxIter	500
+cFileLP		task.txt
+cFileOut	out.txt
+Logging		1

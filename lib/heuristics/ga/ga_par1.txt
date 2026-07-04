@@ -1,0 +1,12 @@
+MaxIterNum		1000
+ImprovementNum		100
+PopulationSize		5
+ChromosomeGeneration	0
+ChromosomeMinSize	1
+ChromosomeMaxSize	5
+SelectionMethod		0
+TourGroupSize		0
+CrossoverPoint		0
+CrossoverProb		3
+MutationMethod		0
+MutationProb		1
