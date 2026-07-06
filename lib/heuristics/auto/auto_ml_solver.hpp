@@ -7,7 +7,7 @@
 // to achieve the best makespan for a given instance.
 //
 // Unlike AutoSolver (which uses hand-coded rules), the policy is learned from
-// ~50 k labelled benchmarks. The training pipeline is:
+// labelled benchmark instances. The training pipeline is:
 //   1. tools/generate_training_data.py — label each instance with the winning solver
 //   2. tools/train_solver_selector.py  — train GBM and overwrite solver_selector.hpp
 //
