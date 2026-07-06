@@ -171,8 +171,10 @@ char* dls_solve(const char* instanceText, const char* solverName, const char* op
 
     std::ostringstream out;
     out << "{\"solver\":" << json::str(solver->name());
-    // Auto dispatches to a concrete method; report which one it chose.
+    // Meta-solvers dispatch to a concrete method; report which one they chose.
     if (auto* meta = dynamic_cast<AutoSolver*>(solver.get()); meta && !meta->chosenSolver().empty())
+        out << ",\"chosen\":" << json::str(meta->chosenSolver());
+    if (auto* meta = dynamic_cast<AutoMlSolver*>(solver.get()); meta && !meta->chosenSolver().empty())
         out << ",\"chosen\":" << json::str(meta->chosenSolver());
     out << ",\"instance\":"; writeInstanceJson(out, inst);
     out << ",\"lowerBound\":" << json::num(divisibleLoadLowerBoundTight(inst))
