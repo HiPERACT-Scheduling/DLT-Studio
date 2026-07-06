@@ -55,6 +55,7 @@ struct SolverOptions {
     Psr       onlinePsr      = Psr::All;        // online: sorting rule (default super)
     double deadline          = std::numeric_limits<double>::infinity();  // optv: T (required)
     double epsilon           = 0.1;     // fptas: approximation precision
+    bool   autoEpsilon       = false;   // fptas: derive ε from instance features
     double costLimit         = std::numeric_limits<double>::infinity();  // bi-criteria G-bar
     int    populationSize    = 12;      // GA
     int    maxGenerations    = 200;     // GA
@@ -141,11 +142,16 @@ inline std::unique_ptr<DLSSolver> makeSolver(const std::string& name,
         return std::make_unique<OptVSolver>(p);
     }
     if (name == "fptas-optv") {
-        FptasOptVParams p; p.deadline = opt.deadline; p.epsilon = opt.epsilon;
+        FptasOptVParams p;
+        p.deadline    = opt.deadline;
+        p.epsilon     = opt.epsilon;
+        p.autoEpsilon = opt.autoEpsilon;
         return std::make_unique<FptasOptVSolver>(p);
     }
     if (name == "fptas-optt") {
-        FptasOptTParams p; p.epsilon = opt.epsilon;
+        FptasOptTParams p;
+        p.epsilon     = opt.epsilon;
+        p.autoEpsilon = opt.autoEpsilon;
         return std::make_unique<FptasOptTSolver>(p);
     }
 #ifdef DLS_WITH_HIGHS

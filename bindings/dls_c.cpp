@@ -142,6 +142,7 @@ char* dls_solve(const char* instanceText, const char* solverName, const char* op
             else if (k == "costLimit")       opt.costLimit = std::stod(v);
             else if (k == "deadline")        opt.deadline = std::stod(v);
             else if (k == "epsilon")         opt.epsilon = std::stod(v);
+            else if (k == "autoEpsilon")     opt.autoEpsilon = (v != "0" && v != "false");
             else if (k == "seed")          { seed = std::stoull(v); haveSeed = true; }
             else if (k == "backend")         opt.evaluatorBackend = v;
             else if (k == "allowRepeats")    opt.allowRepeats = (v != "0");
@@ -176,6 +177,11 @@ char* dls_solve(const char* instanceText, const char* solverName, const char* op
         out << ",\"chosen\":" << json::str(meta->chosenSolver());
     if (auto* meta = dynamic_cast<AutoMlSolver*>(solver.get()); meta && !meta->chosenSolver().empty())
         out << ",\"chosen\":" << json::str(meta->chosenSolver());
+    // FPTAS solvers: report the epsilon actually used (auto-derived or manual).
+    if (auto* s = dynamic_cast<FptasOptVSolver*>(solver.get()))
+        out << ",\"epsilon\":" << json::num(s->computedEpsilon());
+    if (auto* s = dynamic_cast<FptasOptTSolver*>(solver.get()))
+        out << ",\"epsilon\":" << json::num(s->computedEpsilon());
     out << ",\"instance\":"; writeInstanceJson(out, inst);
     out << ",\"lowerBound\":" << json::num(divisibleLoadLowerBoundTight(inst))
         << ",\"solution\":"; writeSolutionJson(out, sol);

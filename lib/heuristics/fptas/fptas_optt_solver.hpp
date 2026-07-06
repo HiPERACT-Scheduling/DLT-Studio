@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>
@@ -41,11 +42,13 @@ namespace dls {
 
 // Algorithm parameters for the OptT FPTAS. The load V is the instance totalLoad.
 struct FptasOptTParams {
-    double epsilon = 0.1;   // approximation precision 0 < ε < 1 (T <= (1+ε)·T_OPT)
+    double epsilon     = 0.1;    // approximation precision 0 < ε < 1 (T <= (1+ε)·T_OPT)
+    bool   autoEpsilon = false;  // derive ε from instance features (overrides epsilon)
 
     [[nodiscard]] bool validate(std::string* error = nullptr) const {
         auto fail = [&](const std::string& m) { if (error) *error = m; return false; };
-        if (!(epsilon > 0.0 && epsilon < 1.0)) return fail("epsilon must satisfy 0 < ε < 1");
+        if (!autoEpsilon && !(epsilon > 0.0 && epsilon < 1.0))
+            return fail("epsilon must satisfy 0 < ε < 1");
         if (error) error->clear();
         return true;
     }
@@ -57,6 +60,9 @@ public:
 
     std::string    name() const override     { return "fptas-optt"; }
     SolverCategory category() const override  { return SolverCategory::Heuristic; }  // (1+ε)-approx
+
+    // Goal:   the ε actually used in the last solve() call.
+    double computedEpsilon() const { return computedEpsilon_; }
 
     // Goal:   minimize the time to process the instance's load V on DLS{Cᵢ=0}.
     // Input:  instance - processors (commRate must be 0; computeRate > 0) and
@@ -72,8 +78,18 @@ public:
         for (const Processor& p : instance.processors())
             if (p.commRate != 0.0) { sol.status = SolveStatus::Failure; return sol; }  // needs Cᵢ=0
 
+        // Resolve epsilon: auto-derive from all processors if requested.
+        if (params_.autoEpsilon) {
+            std::vector<int> allIdx(instance.numProcessors());
+            std::iota(allIdx.begin(), allIdx.end(), 0);
+            computedEpsilon_ = FptasOptVSolver::autoComputeEpsilonPublic(
+                                   instance.processors(), allIdx);
+        } else {
+            computedEpsilon_ = params_.epsilon;
+        }
+
         const double V   = instance.totalLoad();
-        const double eps = params_.epsilon;
+        const double eps = computedEpsilon_;
         const int    m   = static_cast<int>(instance.numProcessors());
 
         double aMax = 0.0, aMin = std::numeric_limits<double>::infinity(), sMax = 0.0;
@@ -154,6 +170,7 @@ public:
 
 private:
     FptasOptTParams params_;
+    mutable double  computedEpsilon_ = 0.1;
 
     // Goal:   V_FPTAS(T, eps) — the OptV FPTAS load for deadline T (Algorithm 2.2).
     static double maxLoadFor(const DLSInstance& instance, double T, double eps) {

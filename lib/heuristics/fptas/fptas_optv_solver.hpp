@@ -46,14 +46,16 @@ namespace dls {
 
 // Algorithm parameters for the OptV FPTAS.
 struct FptasOptVParams {
-    double deadline = std::numeric_limits<double>::infinity();  // T (required, finite, > 0)
-    double epsilon  = 0.1;   // approximation precision 0 < ε < 1 (V >= (1-ε)·V_OPT)
+    double deadline    = std::numeric_limits<double>::infinity();  // T (required, finite, > 0)
+    double epsilon     = 0.1;    // approximation precision 0 < ε < 1 (V >= (1-ε)·V_OPT)
+    bool   autoEpsilon = false;  // derive ε from instance features (overrides epsilon)
 
     [[nodiscard]] bool validate(std::string* error = nullptr) const {
         auto fail = [&](const std::string& m) { if (error) *error = m; return false; };
         if (!(deadline > 0.0 && deadline < std::numeric_limits<double>::infinity()))
             return fail("deadline (T) must be finite and positive");
-        if (!(epsilon > 0.0 && epsilon < 1.0)) return fail("epsilon must satisfy 0 < ε < 1");
+        if (!autoEpsilon && !(epsilon > 0.0 && epsilon < 1.0))
+            return fail("epsilon must satisfy 0 < ε < 1");
         if (error) error->clear();
         return true;
     }
@@ -65,6 +67,11 @@ public:
 
     std::string    name() const override     { return "fptas-optv"; }
     SolverCategory category() const override  { return SolverCategory::Heuristic; }  // (1-ε)-approx
+
+    // Goal:   the ε actually used in the last solve() call.
+    //         When autoEpsilon=false this equals params_.epsilon; when true it is
+    //         the value derived from the instance features.
+    double computedEpsilon() const { return computedEpsilon_; }
 
     // Goal:   maximize the load processable within T on a DLS{Cᵢ=0} instance.
     // Input:  instance - processors (commRate must be 0; computeRate > 0);
@@ -93,6 +100,11 @@ public:
             return procs[a].commStartup * procs[a].computeRate
                  < procs[b].commStartup * procs[b].computeRate;
         });
+
+        // Resolve epsilon: auto-derive from usable processors if requested.
+        computedEpsilon_ = params_.autoEpsilon
+                         ? autoComputeEpsilonPublic(procs, idx)
+                         : params_.epsilon;
 
         const int m = static_cast<int>(idx.size());
         std::vector<char> pick = minimizeHalfProduct(instance, idx, T);   // selected mask
@@ -142,7 +154,28 @@ public:
 
 private:
     FptasOptVParams params_;
+    mutable double  computedEpsilon_ = 0.1;   // set during solve(); read by computedEpsilon()
 
+public:
+    // Goal:   derive ε from a processor set using the formula
+    //         ε = clip( 0.5 / (1 + √m · (1 + CV(Sᵢ))) , 0.01, 0.25 ).
+    //         Larger m or higher startup heterogeneity → tighter ε.
+    // Input:  procs - all processors; idx - indices of the usable subset.
+    // Output: ε in [0.01, 0.25].
+    static double autoComputeEpsilonPublic(const std::vector<Processor>& procs,
+                                           const std::vector<int>& idx) {
+        const int m = static_cast<int>(idx.size());
+        if (m == 0) return 0.1;
+        double sumS = 0.0, sumS2 = 0.0;
+        for (int i : idx) { sumS += procs[i].commStartup; sumS2 += procs[i].commStartup * procs[i].commStartup; }
+        const double meanS = sumS / m;
+        const double varS  = std::max(0.0, sumS2 / m - meanS * meanS);
+        const double cvS   = (meanS > 1e-12) ? std::sqrt(varS) / meanS : 0.0;
+        const double raw   = 0.5 / (1.0 + std::sqrt(static_cast<double>(m)) * (1.0 + cvS));
+        return std::max(0.01, std::min(0.25, raw));
+    }
+
+private:
     // One DP representative: partial half-product value g, partial Σqᵢxᵢ, mask.
     struct Rep { double g; double Q; std::vector<char> x; };
 
@@ -155,7 +188,7 @@ private:
         const int m = static_cast<int>(idx.size());
         if (m == 0) return {};
         const auto& procs = instance.processors();
-        const double eps   = params_.epsilon;
+        const double eps   = computedEpsilon_;   // already resolved (auto or manual)
         const double delta = std::pow(1.0 + eps, 1.0 / m) - 1.0;   // (1+δ)^m = 1+ε
         const double logBucket = std::log1p(delta);               // log(1+δ) > 0
 
