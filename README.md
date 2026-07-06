@@ -69,7 +69,8 @@ one or more installments.
 
 | Solver | Category | When to use |
 |---|---|---|
-| `auto` | meta | default — inspects the instance and dispatches to the best method below |
+| `auto` | meta | rule-based — inspects the instance and dispatches to the best method below |
+| `auto-ml` | meta | learned — gradient-boosted tree trained on 50 k benchmarks selects the solver |
 | `exact` | Exact | small instances (N ≤ 6); branch-and-bound, proven optimum |
 | `exact-dual` | Exact | small instances; dual bisection via OptV — independent optimum check |
 | `exact-milp` | Exact (HiGHS) | single-installment, any N; MILP over assignment + loads |
