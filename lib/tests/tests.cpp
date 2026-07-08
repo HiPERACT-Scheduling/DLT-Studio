@@ -331,6 +331,26 @@ TEST_CASE("MultiMilpSolver matches the MULTI-installment B&B (ample memory)") {
     }
 }
 
+TEST_CASE("MultiMilpSolver handles the unbounded-memory sentinel B=1e18") {
+    // Regression: a raw 1e18 memory value entered the MILP as a coefficient and
+    // wrecked HiGHS conditioning, so milp-multi returned Failure on ANY ample-
+    // memory instance (the common case). Clamping the coefficient to min(B_i,V)
+    // preserves the feasible region (alpha_k <= V always) and fixes it.
+    std::vector<DLSInstance> insts = {
+        DLSInstance({{0.1,0.2,0.3,1e18},{0.2,0.15,0.25,1e18}}, 100.0),
+        DLSInstance({{0.0,0.20,0.30,1e18},{0.0,0.15,0.25,1e18},{0.0,0.25,0.40,1e18}}, 1000.0),
+        DLSInstance({{0.3,0.20,0.30,1e18},{0.2,0.25,0.40,1e18},{0.1,0.30,0.50,1e18}}, 500.0),
+    };
+    for (DLSInstance& inst : insts) {
+        MultiMilpParams mp; mp.maxInstallments = 3;
+        DLSSolution milp = MultiMilpSolver(mp).solve(inst, SolverConfig{});
+        ExactParams ep; ep.maxInstallments = 3; ep.allowRepeats = true;
+        DLSSolution bnb = ExactSolver(ep).solve(inst, SolverConfig{});
+        REQUIRE(milp.status == SolveStatus::Optimal);                        // was Failure before the fix
+        CHECK(milp.makespan == doctest::Approx(bnb.makespan).epsilon(1e-3)); // matches independent exact
+    }
+}
+
 TEST_CASE("MultiMilpSolver can beat single-installment when multi-installment helps") {
     // A 2-processor instance where pipelining (multi-installment) lowers Cmax:
     // milp-multi must be <= the single-installment MILP optimum.

@@ -99,9 +99,13 @@ DLSSolution MultiMilpSolver::solve(const DLSInstance& instance, const SolverConf
         addRow(r, -kHighsInf, 1.0);
     }
     // Per-chunk buffer (and empty-slot forcing): alpha_k <= sum_i B_i x[i][k].
+    // Clamp the coefficient to min(B_i, V): since alpha_k <= U = V always holds,
+    // any memory >= V is non-binding, and an unbounded-memory sentinel (e.g. 1e18)
+    // as a raw coefficient wrecks HiGHS conditioning (returns Failure). min(B_i,V)
+    // preserves the feasible region exactly while keeping coefficients O(V).
     for (int k = 0; k < K; ++k) {
         std::vector<std::pair<int,double>> r{{alphaCol(k), 1.0}};
-        for (int i = 0; i < N; ++i) r.push_back({xCol(i, k), -P[i].memoryLimit});
+        for (int i = 0; i < N; ++i) r.push_back({xCol(i, k), -std::min(P[i].memoryLimit, V)});
         addRow(r, -kHighsInf, 0.0);
     }
     // alpha_k = sum_i w[i][k].

@@ -4,7 +4,11 @@
 # Full ML pipeline: generate data → train → rebuild → restart portal.
 # Run from the repo root:
 #
-#   bash tools/retrain.sh [--n 5000] [--depth 6] [--trees 150]
+#   bash tools/retrain.sh [--n 5000] [--depth 6] [--trees 150] [--workers N]
+#
+# Data generation parallelises across --workers processes (default: all cores).
+# On a single-core host this has no wall-clock effect; the generators stay
+# deterministic regardless of worker count (seed is pinned per instance).
 #
 # To re-train only (CSV already exists):
 #   bash tools/retrain.sh --skip-generate
@@ -13,13 +17,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-N=5000; DEPTH=6; TREES=150; SKIP_GEN=0
+N=5000; DEPTH=6; TREES=150; SKIP_GEN=0; WORKERS="$(nproc 2>/dev/null || echo 1)"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --n)            N="$2";     shift 2;;
-    --depth)        DEPTH="$2"; shift 2;;
-    --trees)        TREES="$2"; shift 2;;
-    --skip-generate) SKIP_GEN=1; shift;;
+    --n)            N="$2";       shift 2;;
+    --depth)        DEPTH="$2";   shift 2;;
+    --trees)        TREES="$2";   shift 2;;
+    --workers)      WORKERS="$2"; shift 2;;
+    --skip-generate) SKIP_GEN=1;  shift;;
     *) echo "Unknown arg: $1"; exit 1;;
   esac
 done
@@ -27,8 +32,8 @@ done
 echo "=== DLT Studio ML retrain ==="
 
 if [[ $SKIP_GEN -eq 0 ]]; then
-  echo "--- Step 1: generate training data ($N instances) ---"
-  python3 tools/generate_training_data.py --n "$N"
+  echo "--- Step 1: generate training data ($N instances, $WORKERS worker(s)) ---"
+  python3 tools/generate_training_data.py --n "$N" --workers "$WORKERS"
 else
   echo "--- Step 1: skipped (--skip-generate) ---"
 fi
@@ -43,7 +48,7 @@ echo "--- Step 2c: train makespan predictor GBM and export C++ header ---"
 python3 tools/train_makespan_predictor.py --depth "$DEPTH" --trees "$TREES"
 
 echo "--- Step 2d: generate MLSD training data and train MLSD Cmax predictor ---"
-python3 tools/generate_mlsd_training_data.py
+python3 tools/generate_mlsd_training_data.py --workers "$WORKERS"
 python3 tools/train_mlsd_predictor.py --depth "$DEPTH" --trees "$TREES"
 
 echo "--- Step 3: rebuild libdls_c.so (HiGHS build) ---"

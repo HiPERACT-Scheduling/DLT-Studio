@@ -31,6 +31,9 @@
 #include "mlsd/mlsd_solver.hpp"
 #include "mlsd/mlsd_ga_solver.hpp"
 #include "heuristics/ml/ml_mlsd_solver.hpp"
+#ifdef DLS_WITH_HIGHS
+#include "exact/milp/mlsd_milp_solver.hpp"   // exact MLSD oracle (β = 0), HiGHS build only
+#endif
 #include "core/bounds.hpp"
 #include "core/instance_features.hpp"
 #include "core/instance_io.hpp"
@@ -238,6 +241,15 @@ char* dls_mlsd_solve(const char* instanceText, const char* solverName, const cha
             << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
                                         : sol.status == SolveStatus::Feasible ? "Feasible"
                                         : "Failure");
+#ifdef DLS_WITH_HIGHS
+    } else if (sname == "mlsd-milp") {
+        MlsdMilpSolver solver{MlsdMilpParams{}};
+        MlsdSolution sol = solver.solve(inst);
+        out << ",\"makespan\":" << json::num(sol.makespan)
+            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
+                                        : sol.status == SolveStatus::Feasible ? "Feasible"
+                                        : "Failure");
+#endif
     } else {
         return dup(errorJson(std::string("unknown MLSD solver '") + sname + "'"));
     }

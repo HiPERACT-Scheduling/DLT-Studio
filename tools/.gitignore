@@ -4,3 +4,4 @@ mlsd_training_data.csv
 *.log
 __pycache__/
 *.pyc
+*.ga-bak

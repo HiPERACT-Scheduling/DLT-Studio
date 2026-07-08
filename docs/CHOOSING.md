@@ -112,6 +112,24 @@ Retrain both models after generating new benchmark data:
 bash tools/retrain.sh --n 50000   # generate → train → rebuild → restart
 ```
 
+### Training-data provenance and oracles
+
+The generators (`tools/generate_training_data.py`, `tools/generate_mlsd_training_data.py`,
+both on the shared `tools/genlib.py` harness) label every row with an **exact
+oracle where one is affordable, a heuristic otherwise**, and record which on the
+row itself. Each CSV carries provenance columns: `seed` (reproduce the row),
+`regime`, `oracle` (the solver that set the label), `label_is_exact` (1 if that
+oracle is provably optimal here), and `solver_wall_ms`. A trainer can then filter
+to `label_is_exact == 1` to learn only from proven optima.
+
+The oracle is chosen by a **deterministic size gate** (never wall-clock), so
+labels are reproducible regardless of host or `--workers` count. For single-load,
+`exact` B&B labels instances with `N ≤ 6`. For MLSD, `mlsd-exact` covers the
+tiny `n·m ≤ 4` cases, and the exact MILP `mlsd-milp` can be enabled for larger
+instances with `--milp-max-n` / `--milp-max-nm` (off by default: each MILP costs
+seconds, so it is practical only on capable hardware). Generation parallelises
+across `--workers` processes.
+
 ## The `ml-makespan` solver
 
 `MlSolver` (registered as `ml-makespan`) is a two-stage solver whose unique

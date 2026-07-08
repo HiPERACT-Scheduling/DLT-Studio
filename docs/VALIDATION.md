@@ -24,7 +24,11 @@ These pin the model to closed-form correctness, independent of any solver.
 - **Multi-installment MILP == Exact B&B (multi-installment)** — `milp-multi`, an
   independent MILP of the carried-load (no same-processor comm/compute overlap)
   model, equals `ExactSolver(allowRepeats=true)` on ample-memory instances, and
-  is ≤ the single-installment optimum when pipelining helps.
+  is ≤ the single-installment optimum when pipelining helps. A regression case
+  pins the unbounded-memory sentinel `B = 1e18`: the raw value once entered the
+  MILP as a coefficient and wrecked HiGHS conditioning (returning `Failure` on
+  any ample-memory instance); the buffer coefficient is now clamped to
+  `min(Bᵢ, V)` (equivalent, since `αₖ ≤ V` always) and the optimum still matches.
 - **Brute force == Exact B&B** on small instances (validates the B&B pruning).
 - **Dual bisection == Exact B&B** — `exact-dual` reaches the makespan optimum by
   a different paradigm (bisect the deadline, solve the OptV decision problem each
