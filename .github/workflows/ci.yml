@@ -29,10 +29,14 @@ jobs:
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y ninja-build
       - name: Configure (HiGHS via vcpkg)
+        # The vcpkg manifest (vcpkg.json) lives in lib/, not the repo root, so point
+        # VCPKG_MANIFEST_DIR at it — otherwise the runner's vcpkg finds no manifest,
+        # never installs HiGHS, and find_package(HIGHS) fails at configure time.
         run: >
           cmake -B build -S .
           -DDLS_WITH_HIGHS=ON
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DVCPKG_MANIFEST_DIR=${{ github.workspace }}/lib
       - name: Build
         run: cmake --build build
       - name: Test
