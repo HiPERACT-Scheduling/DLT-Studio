@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # The library must always build and pass WITHOUT any external dependency.
+  dependency-free:
+    name: dependency-free (CSimplex only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -S .
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # The optional HiGHS backend, pulled via vcpkg (manifest mode; HiGHS version
+  # pinned by vcpkg.json's builtin-baseline). Uses the vcpkg preinstalled on the
+  # GitHub runner image (VCPKG_INSTALLATION_ROOT).
+  with-highs:
+    name: with HiGHS (vcpkg)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure (HiGHS via vcpkg)
+        run: >
+          cmake -B build -S .
+          -DDLS_WITH_HIGHS=ON
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

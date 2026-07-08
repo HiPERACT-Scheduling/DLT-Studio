@@ -30,6 +30,7 @@
 #include "heuristics/single_round/single_round_solver.hpp"
 #include "heuristics/auto/auto_solver.hpp"
 #include "heuristics/auto/auto_ml_solver.hpp"
+#include "heuristics/ml/ml_solver.hpp"
 #include "heuristics/fptas/fptas_optv_solver.hpp"
 #include "heuristics/fptas/fptas_optt_solver.hpp"
 #include "exact/enumerative/exact_solver.hpp"
@@ -66,7 +67,7 @@ struct SolverOptions {
 // Output: stable names usable with makeSolver (MILP only in the HiGHS build).
 inline std::vector<std::string> availableSolvers() {
     std::vector<std::string> v = {
-        "auto", "auto-ml", "ga", "best-rate", "online", "single-round", "exact", "exact-dual", "optv", "fptas-optv", "fptas-optt"
+        "auto", "auto-ml", "ml-makespan", "ga", "best-rate", "online", "single-round", "exact", "exact-dual", "optv", "fptas-optv", "fptas-optt"
     };
 #ifdef DLS_WITH_HIGHS
     v.push_back("exact-milp");
@@ -91,6 +92,12 @@ inline std::unique_ptr<DLSSolver> makeSolver(const std::string& name,
         p.maxInstallments  = opt.maxInstallments;
         p.evaluatorBackend = opt.evaluatorBackend;
         return std::make_unique<AutoMlSolver>(p);
+    }
+    if (name == "ml-makespan") {
+        MlSolverParams p;
+        p.evaluatorBackend = opt.evaluatorBackend;
+        p.maxInstallments  = opt.maxInstallments;
+        return std::make_unique<MlSolver>(p);
     }
     if (name == "ga") {
         GAParams p;

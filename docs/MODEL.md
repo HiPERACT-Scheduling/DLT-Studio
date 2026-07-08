@@ -205,9 +205,10 @@ The monolithic MILP decides the sequence as well, adding:
 > for the processor count (here **N**) and **z** for the installment count (here
 > **L**). Availability conditions p_i, r_i, d_i from the thesis are now
 > implemented (above). The affine cost model (f_i, l_i, criterion G) and the
-> bi-criteria direction min Cmax s.t. G<=G-bar are now implemented. Still to
-> come: the reverse bi-criteria direction (min G s.t. Cmax<=C-bar), result
-> return beta_j, and the MLSD multiple-loads problem class.
+> bi-criteria direction min Cmax s.t. G<=G-bar are now implemented. The MLSD
+> multiple-loads problem class is fully implemented (see below). Still to come:
+> the reverse bi-criteria direction (min G s.t. Cmax<=C-bar) and result return
+> beta_j for the MILP.
 
 ---
 
@@ -242,6 +243,9 @@ Same two-layer decomposition as the single-load model:
 Solvers/backends:
 - `MlsdSolver` — exact (enumerate structures).
 - `MlsdGaSolver` — genetic heuristic (genome = MlsdStructure; reproducible from a seed).
+- `MlMlsdSolver` — two-stage ML solver: GBM predicts `log(Cmax*)` from
+  `MlsdInstanceFeatures` (12-feature vector), then `MlsdGaSolver` constructs the
+  schedule. Exposes `predictedMakespan()` for ML-accuracy benchmarking.
 - `MlsdScheduleEvaluator(backend)` — "simplex" (default) or "highs" (a generic
   `solveLpViaHighs` LP helper, DLS_WITH_HIGHS).
 

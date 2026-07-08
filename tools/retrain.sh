@@ -33,8 +33,18 @@ else
   echo "--- Step 1: skipped (--skip-generate) ---"
 fi
 
-echo "--- Step 2: train GBM and export C++ header ---"
+echo "--- Step 2a: train solver selector GBM and export C++ header ---"
 python3 tools/train_solver_selector.py --depth "$DEPTH" --trees "$TREES"
+
+echo "--- Step 2b: train difficulty predictor GBM and export C++ header ---"
+python3 tools/train_difficulty_predictor.py --depth "$DEPTH" --trees "$TREES"
+
+echo "--- Step 2c: train makespan predictor GBM and export C++ header ---"
+python3 tools/train_makespan_predictor.py --depth "$DEPTH" --trees "$TREES"
+
+echo "--- Step 2d: generate MLSD training data and train MLSD Cmax predictor ---"
+python3 tools/generate_mlsd_training_data.py
+python3 tools/train_mlsd_predictor.py --depth "$DEPTH" --trees "$TREES"
 
 echo "--- Step 3: rebuild libdls_c.so (HiGHS build) ---"
 cmake --build build-highs --target dls_c
@@ -47,4 +57,4 @@ else
   echo "(dls-studio not running, skip restart)"
 fi
 
-echo "=== Done. auto-ml solver is now using the trained model. ==="
+echo "=== Done. auto-ml, difficulty, makespan and MLSD predictors are using trained models. ==="

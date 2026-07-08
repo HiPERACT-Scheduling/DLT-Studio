@@ -14,7 +14,8 @@ Four problem families:
 - **Single-load DLS** (`core/`, `heuristics/`, `exact/`): one divisible load `V`
   distributed over `N` processors in a single-port star, minimizing the makespan
   `Cmax`. Solvers: a genetic heuristic, a fast best-rate constructive heuristic,
-  an exact branch-and-bound, and an exact MILP.
+  an ML-assisted solver (`ml-makespan`, two-stage GBM + GA), an exact
+  branch-and-bound, and an exact MILP.
 - **MLSD** (`mlsd/`): `n` divisible *tasks* over `m` processors. Solvers: an exact
   enumerator and a genetic heuristic.
 - **MapReduce** (`mapreduce/`): a map phase feeding a reduce phase (precedence).
@@ -168,6 +169,36 @@ together, activated in non-decreasing `Cᵢ` order. O(m log m), no LP. Exact whe
 DLSSolution s = SingleRoundSolver().solve(inst, cfg);
 ```
 
+### ML-assisted solver — `ml-makespan` (GBM prediction + GA schedule)
+
+A two-stage solver that exposes the **ML-predicted optimal makespan** alongside
+the actual schedule, enabling direct comparison of ML accuracy against heuristics
+and exact solvers at runtime.
+
+- **Stage 1** — a GBM regressor (trained on `log(T*)`) predicts the optimal
+  makespan from 16 instance features in < 1 µs. The result is exposed via
+  `MlSolver::predictedMakespan()` and in the CLI/JSON response as
+  `"predictedMakespan"`.
+- **Stage 2** — the best applicable heuristic builds the schedule:
+  - No `Sᵢ`, no `Cᵢ`, no memory cap → `BestRateSolver` (LP-optimal)
+  - `Sᵢ > 0`, `Cᵢ = 0`, no memory cap → `FptasOptTSolver` (ε = 0.05)
+  - General (comm costs or memory caps present) → `GASolver`
+
+```cpp
+#include "heuristics/ml/ml_solver.hpp"
+MlSolverParams p; p.maxInstallments = 5;
+MlSolver solver(p);
+DLSSolution s = solver.solve(inst, cfg);
+double predicted = solver.predictedMakespan();   // ML's estimate of T*
+double actual    = s.makespan;                   // schedule makespan (GA/FPTAS/BestRate)
+```
+
+The model ships as a closed-form placeholder and is overwritten by
+`tools/train_makespan_predictor.py` after the training pipeline runs:
+```bash
+bash tools/retrain.sh --n 50000
+```
+
 ### Branch-and-bound (exact, small/moderate instances)
 ```cpp
 #include "exact/enumerative/exact_solver.hpp"
@@ -312,6 +343,13 @@ The dual `FptasOptTSolver` minimizes the *time* to process the instance's load
 DLSSolution t = FptasOptTSolver({/*epsilon=*/0.05}).solve(inst, cfg);
 double minTime = t.makespan;                              // ≤ 1.05·T_OPT
 ```
+**Auto-ε** — both FPTAS solvers can derive ε automatically from instance features
+(balancing approximation quality against the scheduler's own heuristic error):
+```cpp
+FptasOptVParams f; f.deadline = 20.0; f.autoEpsilon = true;   // ignores f.epsilon
+FptasOptTParams t; t.autoEpsilon = true;
+// the computed ε is reported in the CLI output and in FptasOptTSolver::computedEpsilon()
+```
 
 ---
 
@@ -439,14 +477,37 @@ Processor p; p.commStartup=1; p.commRate=1; p.computeRate=1; p.memoryLimit=1e18;
 // 2 tasks {size, β}, 3 processors:
 MlsdInstance inst({ {32.0, 0.0}, {2.0, 0.0} }, {p, p, p});
 
-MlsdSolution exact = MlsdSolver().solve(inst);          // exact (small instances)
-MlsdSolution heur  = MlsdGaSolver({}).solve(inst, /*seed=*/1);   // GA heuristic
+MlsdSolution exact = MlsdSolver().solve(inst);               // exact (small instances)
+MlsdSolution heur  = MlsdGaSolver({MlsdGaSolver::Params{}}).solve(inst);  // GA heuristic
 
 std::printf("exact Cmax = %.3f\n", exact.makespan);
 // exact.taskOrder is the chosen task order; exact.loads[l][k] the per-task loads.
 ```
 The MLSD evaluator also takes a backend: `MlsdScheduleEvaluator("highs")`. Set a
 task's `resultFraction` for result return.
+
+**ML-assisted MLSD solver** (`ml-mlsd`) — two-stage: GBM predicts `log(Cmax*)`,
+then `MlsdGaSolver` builds the schedule. Exposes `predictedMakespan()` for
+ML-accuracy benchmarking:
+```cpp
+#include "heuristics/ml/ml_mlsd_solver.hpp"
+MlMlsdSolver ml;
+MlsdSolution s = ml.solve(inst);
+double predicted = ml.predictedMakespan();   // GBM estimate of Cmax*
+double actual    = s.makespan;               // GA schedule makespan
+```
+
+**Instance feature vector** (`MlsdInstanceFeatures`) — a 12-feature fixed-size
+vector (nTasks, nProcs, load statistics, memory ratio, processor heterogeneity)
+usable for benchmarking or custom ML models:
+```cpp
+#include "mlsd/mlsd_instance_features.hpp"
+MlsdInstanceFeatures f = computeMlsdFeatures(inst);
+// f.nTasks, f.nProcs, f.meanV, f.cvV, f.maxMinV, f.totalLoadPerProc,
+// f.memoryRatio, f.meanA, f.heteroA, f.speedupA, f.hasStartups, f.hasCommCost
+```
+
+CLI: `--solver=mlsd-exact|mlsd-ga|ml-mlsd` with `--class=mlsd`.
 
 ---
 

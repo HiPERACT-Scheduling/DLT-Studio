@@ -1,3 +1,6 @@
 training_data.csv
+difficulty_data.csv
+mlsd_training_data.csv
+*.log
 __pycache__/
 *.pyc

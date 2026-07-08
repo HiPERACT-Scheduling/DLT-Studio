@@ -241,12 +241,16 @@ private:
         }
         result.status   = SolveStatus::Feasible;   // GA gives no optimality proof
         result.makespan = pop.bestCmax;
+        double busTime = 0.0;                       // single-port bus: transfers are sequential
         for (const ::Gene& gene : pop.best.genes) {
             const int proc0 = gene.processorNum - 1;    // GA is 1-based; DLS is 0-based
             result.sequence.push_back(proc0);
             LoadFragment frag;                          // one installment of the schedule
             frag.processorId = proc0;
             frag.loadSize    = gene.dataSize;
+            frag.commStart   = busTime;                 // earliest start on the shared bus
+            const Processor& p = instanceForCost.processors()[proc0];
+            busTime += p.commStartup + p.commRate * gene.dataSize;  // t_{i+1} = t_i + S + C·α_i
             result.fragments.push_back(frag);
         }
         result.cost = scheduleCost(instanceForCost, result.fragments);

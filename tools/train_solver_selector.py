@@ -24,7 +24,8 @@ from sklearn.tree import _tree
 
 FEATURE_NAMES = ["N", "memoryRatio", "hasStartups", "hasCommCost",
                  "heteroA", "heteroC", "heteroS", "startupFraction",
-                 "hasBeta", "hasCost"]
+                 "hasBeta", "hasCost",
+                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc"]
 
 
 # ── CSV load ───────────────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ def gbm_to_cpp(model, feature_names):
     lines.append("")
 
     # class index → solver name table
-    lines.append("static const char* const kSolverNames[] = {")
+    lines.append("static constexpr const char* kSolverNames[] = {")
     for cls in classes:
         lines.append(f'    "{cls}",')
     lines.append("};")

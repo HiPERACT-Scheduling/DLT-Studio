@@ -20,6 +20,7 @@ For the model and symbols see [MODEL.md](MODEL.md); to run a solver see
 | **ample memory, no startups** (`Sᵢ = 0`) | `single-round` | closed-form **optimum** for this case, instant |
 | **ample memory, with startups**, larger `N` | `ga` | general-purpose quality at scale |
 | any of the above, don't want to decide | `auto` | picks one of the above from the features |
+| want an **ML-predicted T\*** alongside the schedule | `ml-makespan` | GBM predicts log(T\*) in < 1 µs; GA builds the schedule; reports both |
 
 ## Different objectives (not makespan)
 
@@ -72,3 +73,68 @@ DLSSolution s = a.solve(inst, cfg);
 `auto` is a *heuristic dispatcher* — it does not guarantee the global optimum
 (except when it happens to pick `exact`). For a guaranteed optimum on a small
 instance, ask for `exact` directly.
+
+## The `auto-ml` meta-solver
+
+`AutoMlSolver` (registered as `auto-ml`) extracts a **16-feature vector** from the
+instance (`N`, memory ratio, heterogeneity in `A/C/S`, startup fraction, mean
+rates, speedup ratios, load per processor) and feeds it into a gradient-boosted
+tree (GBM, 150 stages × 5 classes, trained on labelled DLT benchmarks) to predict
+which portfolio solver will achieve the lowest makespan. Like `auto`, it then runs
+that solver and reports the chosen name. The model is embedded as zero-dependency
+C++ arithmetic (see `heuristics/auto/solver_selector.hpp`); inference is
+sub-microsecond.
+
+The learned selector is ~74% accurate, and a wrong pick can be far worse than the
+best solver (not just marginally), so two rule-based guards backstop it:
+
+- **small N** (`N ≤ 6`): exact B&B is affordable and provably optimal, so the
+  selector can only match or lose — `auto-ml` bypasses it and solves exactly.
+- **best-rate on ample memory** (`Σ Bᵢ ≥ V`): `best-rate` degenerates to a single
+  installment there and is never the true best, so such a pick is treated as a
+  misprediction and replaced by the rule-based ample-memory choice (`single-round`
+  when all `Sᵢ = 0`, else `ga`). On genuinely memory-limited instances
+  (`Σ Bᵢ < V`) the guard stays out of the way and `best-rate` is used as picked.
+
+These mirror `auto`'s hand-coded rules, so `auto-ml` is never obviously worse than
+`auto` on the cases the rules cover.
+
+The response also includes an instance **difficulty** label (`easy` / `medium` /
+`hard`), predicted by a separate GBM classifier that estimates how far the best
+heuristic falls from exact — useful for deciding whether to escalate to `exact`.
+
+```bash
+dls solve --solver=auto-ml instance.txt   # prints "chose : ..." + difficulty
+```
+
+Retrain both models after generating new benchmark data:
+```bash
+bash tools/retrain.sh --n 50000   # generate → train → rebuild → restart
+```
+
+## The `ml-makespan` solver
+
+`MlSolver` (registered as `ml-makespan`) is a two-stage solver whose unique
+output is the **ML-predicted optimal makespan T\*** alongside the actual schedule:
+
+- **Stage 1** — a GBM regressor (trained on `log(T*)`) predicts the optimal
+  makespan from the 16-feature vector in < 1 µs. The prediction is reported
+  separately as `predictedMakespan`.
+- **Stage 2** — the best applicable heuristic constructs a valid schedule:
+  - `Sᵢ = 0, Cᵢ = 0`, no memory cap → `BestRateSolver` (LP-optimal here)
+  - `Sᵢ > 0, Cᵢ = 0`, no memory cap → `FptasOptTSolver` (ε = 0.05 guarantee)
+  - General (comm costs or memory caps) → `GASolver` (searches activation orders,
+    LP-optimises each split; correctly distributes load across all processors)
+
+This lets you compare `predictedMakespan` (what the ML model thinks is optimal)
+against the actual schedule makespan and against a lower bound — a direct
+empirical test of ML prediction quality at inference time, with no extra solver
+invocation.
+
+```bash
+dls solve --solver=ml-makespan instance.txt
+# JSON response includes "predictedMakespan": <T_ml> alongside "solution.makespan"
+```
+
+The model is in `heuristics/ml/makespan_predictor.hpp` (placeholder until
+`tools/train_makespan_predictor.py` runs). Retrain via `bash tools/retrain.sh`.

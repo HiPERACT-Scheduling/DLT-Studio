@@ -27,14 +27,19 @@
 #include <vector>
 
 #include "bench/benchmark.hpp"          // computePerformanceMap, runBenchmark
-#include "cli/class_io.hpp"             // chain/tree/graph readers + topology solvers
+#include "cli/class_io.hpp"             // chain/tree/graph readers + topology solvers + readMlsdInstance
+#include "mlsd/mlsd_solver.hpp"
+#include "mlsd/mlsd_ga_solver.hpp"
+#include "heuristics/ml/ml_mlsd_solver.hpp"
 #include "core/bounds.hpp"
+#include "core/instance_features.hpp"
 #include "core/instance_io.hpp"
 #include "core/json_io.hpp"
 #include "core/pareto.hpp"               // timeEnergyFront
 #include "core/schedule_expand.hpp"
 #include "core/simplex_schedule_evaluator.hpp"
 #include "core/solver_registry.hpp"
+#include "heuristics/auto/difficulty_predictor.hpp"
 #include "util/time.hpp"
 
 using namespace dls;
@@ -182,9 +187,60 @@ char* dls_solve(const char* instanceText, const char* solverName, const char* op
         out << ",\"epsilon\":" << json::num(s->computedEpsilon());
     if (auto* s = dynamic_cast<FptasOptTSolver*>(solver.get()))
         out << ",\"epsilon\":" << json::num(s->computedEpsilon());
+    // ML solver: report the ML-predicted makespan alongside the scheduled one.
+    if (auto* s = dynamic_cast<MlSolver*>(solver.get()))
+        out << ",\"predictedMakespan\":" << json::num(s->predictedMakespan());
+    // Instance difficulty prediction (property of the instance, solver-independent).
+    out << ",\"difficulty\":" << json::str(DifficultyPredictor::predict(computeFeatures(inst)));
     out << ",\"instance\":"; writeInstanceJson(out, inst);
     out << ",\"lowerBound\":" << json::num(divisibleLoadLowerBoundTight(inst))
         << ",\"solution\":"; writeSolutionJson(out, sol);
+    out << "}";
+    return dup(out.str());
+}
+
+// Goal:   solve an MLSD instance (text format) with a named MLSD solver.
+// Input:  instanceText - task/proc format (see cli/class_io.hpp readMlsdInstance);
+//         solverName   - "mlsd-exact" | "mlsd-ga";
+//         optsText     - "key=value;..." options (maxInstallments, seed).
+// Output: heap JSON {solver, makespan, status} or error. Release with dls_free.
+char* dls_mlsd_solve(const char* instanceText, const char* solverName, const char* optsText) {
+    MlsdInstance inst;
+    std::string err;
+    std::istringstream in(instanceText ? instanceText : "");
+    if (!readMlsdInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+
+    Opts o = parseOptsT(optsText);
+    const std::string sname = solverName ? solverName : "mlsd-exact";
+
+    std::ostringstream out;
+    out << "{\"solver\":" << json::str(sname);
+
+    if (sname == "mlsd-exact") {
+        MlsdSolver solver;
+        MlsdSolution sol = solver.solve(inst);
+        out << ",\"makespan\":" << json::num(sol.makespan)
+            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
+                                        : sol.status == SolveStatus::Feasible ? "Feasible"
+                                        : "Failure");
+    } else if (sname == "mlsd-ga") {
+        MlsdGaSolver solver{MlsdGaSolver::Params{}};
+        MlsdSolution sol = solver.solve(inst);
+        out << ",\"makespan\":" << json::num(sol.makespan)
+            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
+                                        : sol.status == SolveStatus::Feasible ? "Feasible"
+                                        : "Failure");
+    } else if (sname == "ml-mlsd") {
+        MlMlsdSolver solver;
+        MlsdSolution sol = solver.solve(inst);
+        out << ",\"predictedMakespan\":" << json::num(solver.predictedMakespan())
+            << ",\"makespan\":" << json::num(sol.makespan)
+            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
+                                        : sol.status == SolveStatus::Feasible ? "Feasible"
+                                        : "Failure");
+    } else {
+        return dup(errorJson(std::string("unknown MLSD solver '") + sname + "'"));
+    }
     out << "}";
     return dup(out.str());
 }

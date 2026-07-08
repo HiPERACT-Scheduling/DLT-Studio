@@ -2,10 +2,13 @@
 """
 tools/generate_training_data.py
 
-Generate labelled training data for the ML solver selector.
+Generate labelled training data for the ML solver selector and difficulty predictor.
 
-For each random DLSInstance, the applicable fast solvers are run and the one
-achieving the best (lowest) makespan is recorded as the label.
+For each random DLSInstance:
+  - Runs applicable solvers, records which achieved the best makespan → training_data.csv
+  - Computes the gap between the best heuristic and exact (when N <= 6), derives an
+    easy/medium/hard difficulty label → difficulty_data.csv
+
 Features match InstanceFeatures in core/instance_features.hpp.
 
 Solver selection is adaptive to N:
@@ -13,7 +16,7 @@ Solver selection is adaptive to N:
   N >  6  : single-round, ga, best-rate, online
   (exact is O(N^k) and becomes prohibitively slow for N > 6)
 
-Output: tools/training_data.csv
+Output: tools/training_data.csv, tools/difficulty_data.csv
 
 Usage:
     python3 tools/generate_training_data.py [--n 5000] [--seed 42]
@@ -121,10 +124,13 @@ def compute_features(V, procs):
         return math.sqrt(max(var, 0)) / m
 
     mA = sum(A) / n
+    mC = sum(C) / n
     mS = sum(S) / n
     sumB = sum(B)
     mem_ratio = min(sumB / V, 1e6) if V > 1e-12 else 1e6
     startup_frac = (n * mS) / (n * mS + V * mA + 1e-12)
+    speedupA = max(A) / min(A) if min(A) > 1e-12 else 1.0
+    speedupC = max(C) / min(C) if min(C) > 1e-12 else 1.0
 
     return [
         float(n),
@@ -135,13 +141,20 @@ def compute_features(V, procs):
         cv(C),
         cv(S),
         startup_frac,
-        0.0,
-        0.0,
+        0.0,   # hasBeta (not generated in this script)
+        0.0,   # hasCost (not generated in this script)
+        mA,
+        mC,
+        mS,
+        speedupA,
+        speedupC,
+        V / n,
     ]
 
 FEATURE_NAMES = ["N", "memoryRatio", "hasStartups", "hasCommCost",
                  "heteroA", "heteroC", "heteroS", "startupFraction",
-                 "hasBeta", "hasCost"]
+                 "hasBeta", "hasCost",
+                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc"]
 
 # ── main loop ─────────────────────────────────────────────────────────────
 
@@ -156,8 +169,11 @@ def main():
     regimes = [0, 1, 2, 3, 4]
     regime_weights = [0.15, 0.25, 0.20, 0.20, 0.20]
 
-    rows    = []
+    rows            = []   # solver-selector training data
+    difficulty_rows = []   # difficulty predictor training data
     skipped = 0
+
+    diff_out = os.path.join(os.path.dirname(args.out), "difficulty_data.csv")
 
     print(f"Generating {args.n} instances using {LIB_PATH}")
     print(f"Fast solvers: {FAST_SOLVERS}  |  Exact solvers (N<={EXACT_N_LIMIT}): {EXACT_SOLVERS}")
@@ -196,30 +212,65 @@ def main():
             skipped += 1
             continue
 
-        rows.append(features + [best_solver])
+        rows.append(features + [best_solver, best_makespan])
+
+        # Difficulty label: gap between best heuristic and exact optimum.
+        exact_ms = results.get("exact")
+        heuristic_ms = min(
+            (results[s] for s in FAST_SOLVERS if s in results),
+            default=float("inf"))
+        if exact_ms is not None and heuristic_ms < float("inf"):
+            gap = (heuristic_ms - exact_ms) / (exact_ms + 1e-12)
+            if gap < 0.01:
+                difficulty = "easy"
+            elif gap < 0.10:
+                difficulty = "medium"
+            else:
+                difficulty = "hard"
+        elif N > EXACT_N_LIMIT:
+            difficulty = "hard"   # exact intractable; heuristic quality unknown
+        else:
+            difficulty = None     # not enough data for this instance
+
+        if difficulty is not None:
+            difficulty_rows.append(features + [difficulty])
 
         if (i + 1) % 500 == 0:
             elapsed = time.time() - t_start
             rate    = (i + 1) / elapsed
             eta     = (args.n - i - 1) / rate
-            print(f"  {i+1}/{args.n}  rows={len(rows)}  skipped={skipped}  "
-                  f"{elapsed:.0f}s  ETA {eta:.0f}s", flush=True)
+            print(f"  {i+1}/{args.n}  rows={len(rows)}  diff={len(difficulty_rows)}  "
+                  f"skipped={skipped}  {elapsed:.0f}s  ETA {eta:.0f}s", flush=True)
 
-    header = FEATURE_NAMES + ["best_solver"]
+    header = FEATURE_NAMES + ["best_solver", "best_makespan"]
     with open(args.out, "w") as f:
         f.write(",".join(header) + "\n")
         for row in rows:
             f.write(",".join(str(v) for v in row) + "\n")
 
+    diff_header = FEATURE_NAMES + ["difficulty"]
+    with open(diff_out, "w") as f:
+        f.write(",".join(diff_header) + "\n")
+        for row in difficulty_rows:
+            f.write(",".join(str(v) for v in row) + "\n")
+
     elapsed = time.time() - t_start
-    print(f"\nDone in {elapsed:.0f}s. {len(rows)} rows → {args.out}  (skipped {skipped})")
+    print(f"\nDone in {elapsed:.0f}s.")
+    print(f"  {len(rows)} solver-selector rows → {args.out}  (skipped {skipped})")
+    print(f"  {len(difficulty_rows)} difficulty rows → {diff_out}")
 
     from collections import Counter
-    labels = [r[-1] for r in rows]
+    labels = [r[-2] for r in rows]   # last column is best_makespan; label is second-to-last
     dist   = Counter(labels)
-    print("\nLabel distribution:")
+    print("\nSolver label distribution:")
     for solver, count in sorted(dist.items(), key=lambda x: -x[1]):
         print(f"  {solver:20s} {count:6d}  ({100*count/len(rows):.1f}%)")
+
+    dlabels = [r[-1] for r in difficulty_rows]
+    ddist   = Counter(dlabels)
+    print("\nDifficulty label distribution:")
+    for label, count in sorted(ddist.items(), key=lambda x: -x[1]):
+        print(f"  {label:20s} {count:6d}  ({100*count/len(difficulty_rows):.1f}%)")
 
 if __name__ == "__main__":
     main()

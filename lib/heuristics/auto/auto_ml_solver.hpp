@@ -14,6 +14,15 @@
 // solver_selector.hpp ships as a placeholder (heuristic fallback identical to
 // AutoSolver) until the training script overwrites it with the trained model.
 //
+// The learned selector is only ~74% accurate, so two rule-based guards protect
+// against its worst mispredictions (a wrong pick can be ~2× off, not just mildly):
+//   - small N (N <= smallThreshold): exact B&B is affordable and provably optimal,
+//     so the selector can only match or lose — skip it and solve exactly.
+//   - a best-rate pick with ample memory (Σ Bᵢ >= V): best-rate degenerates to a
+//     single installment there (see docs/CHOOSING.md) and is never the true best,
+//     so the pick is a misprediction — substitute the rule-based ample-memory
+//     choice (single-round when all Sᵢ = 0, else GA).
+//
 // It builds concrete solver objects directly (not via the registry) to avoid an
 // include cycle — the same pattern used by AutoSolver.
 //---------------------------------------------------------------------------
@@ -45,10 +54,12 @@
 namespace dls {
 
 struct AutoMlParams {
+    int    smallThreshold    = 6;   // N <= this ⇒ solve exactly (guard, bypasses the selector)
     int    maxInstallments   = 5;
     std::string evaluatorBackend = "simplex";
 
     [[nodiscard]] bool validate(std::string* error = nullptr) const {
+        if (smallThreshold  < 1) { if (error) *error = "smallThreshold must be >= 1";  return false; }
         if (maxInstallments < 1) { if (error) *error = "maxInstallments must be >= 1"; return false; }
         if (error) error->clear();
         return true;
@@ -72,11 +83,37 @@ public:
         if (!params_.validate(&error))  { result.status = SolveStatus::Failure;    return result; }
 
         const InstanceFeatures feats = computeFeatures(instance);
-        chosen_ = SolverSelector::predict(feats);
 
-        result = dispatch(chosen_, instance, config, feats);
+        // ---- raw instance geometry the guards need ------------------------
+        const int    N = static_cast<int>(instance.numProcessors());
+        const double V = instance.totalLoad();
+        double sumB = 0.0;
+        bool allZeroStartup = true, anyUnbounded = false;
+        for (const Processor& p : instance.processors()) {
+            if (p.memoryLimit <= 0.0) anyUnbounded = true;
+            else                      sumB += p.memoryLimit;
+            if (p.commStartup != 0.0) allZeroStartup = false;
+        }
+        const bool ampleMemory = anyUnbounded || sumB >= V;
 
-        // Safety net: if the predicted solver fails, retry with best-rate which
+        // ---- Guard 1: small N ⇒ exact is affordable and provably optimal, so
+        //      the learned selector can only match or lose. Bypass it entirely.
+        if (N <= params_.smallThreshold) {
+            chosen_ = "exact";
+            result  = solveExact(instance, config);
+        } else {
+            chosen_ = SolverSelector::predict(feats);
+
+            // ---- Guard 2: a best-rate pick with ample memory is a misprediction
+            //      (best-rate degenerates to one installment there). Substitute
+            //      the rule-based ample-memory choice.
+            if (chosen_ == "best-rate" && ampleMemory)
+                chosen_ = allZeroStartup ? "single-round" : "ga";
+
+            result = dispatch(chosen_, instance, config, feats);
+        }
+
+        // Safety net: if the chosen solver fails, retry with best-rate which
         // handles any multi-installment case.
         if (!result.feasible() && chosen_ != "best-rate") {
             DLSSolution alt = bestRate(instance, config);
@@ -110,11 +147,7 @@ private:
             return OnlineSolver().solve(inst, cfg);
         }
         if (solver == "exact") {
-            ExactParams p;
-            p.maxInstallments  = params_.maxInstallments;
-            p.allowRepeats     = true;
-            p.evaluatorBackend = params_.evaluatorBackend;
-            return ExactSolver(p).solve(inst, cfg);
+            return solveExact(inst, cfg);
         }
         if (solver == "exact-dual") {
             DualBisectionParams p;
@@ -146,6 +179,24 @@ private:
     DLSSolution bestRate(const DLSInstance& inst, const SolverConfig& cfg) const {
         BestRateParams bp; bp.evaluatorBackend = params_.evaluatorBackend;
         return BestRateSolver(bp).solve(inst, cfg);
+    }
+
+    // Goal:   solve exactly with enough installments for the memory limits.
+    // Input:  inst - the instance; cfg - solver configuration.
+    // Output: the B&B solution (proven optimum within the installment cap).
+    // Matches AutoSolver's exact configuration so both meta-solvers agree.
+    DLSSolution solveExact(const DLSInstance& inst, const SolverConfig& cfg) const {
+        const int    N = static_cast<int>(inst.numProcessors());
+        const double V = inst.totalLoad();
+        double maxB = 0.0;                                   // largest memory buffer
+        for (const Processor& p : inst.processors())
+            if (p.memoryLimit > 0.0) maxB = std::max(maxB, p.memoryLimit);
+        ExactParams p;
+        p.allowRepeats     = true;
+        p.evaluatorBackend = params_.evaluatorBackend;
+        const int needed = (maxB > 0.0) ? static_cast<int>(std::ceil(V / maxB)) : 1;
+        p.maxInstallments  = std::min(7, std::max({N, needed, params_.maxInstallments}));
+        return ExactSolver(p).solve(inst, cfg);
     }
 };
 
