@@ -28,6 +28,7 @@
 
 #include "bench/benchmark.hpp"          // computePerformanceMap, runBenchmark
 #include "cli/class_io.hpp"             // chain/tree/graph readers + topology solvers + readMlsdInstance
+#include "mapreduce/mapreduce_solver.hpp"  // closed-form MapReduce (multilayer solver comes via class_io.hpp)
 #include "mlsd/mlsd_solver.hpp"
 #include "mlsd/mlsd_ga_solver.hpp"
 #include "heuristics/ml/ml_mlsd_solver.hpp"
@@ -402,10 +403,10 @@ char* dls_bench(const char* optsText) {
     return dup(out.str());
 }
 
-// Goal:   solve a non-star topology (chain / tree / graph) divisible load.
-// Input:  klass = "chain"|"tree"|"graph"; text = the class's line-oriented instance
-//         (chain: "V <load>" + "node <A> <C>"; tree: "node <A> <C> <parent>";
-//         graph: "node <A>" + "edge <u> <v> <rate>"); opts unused.
+// Goal:   solve a non-star problem class (chain/tree/graph topology, or the
+//         closed-form MapReduce / multilayer pipelines) divisible load.
+// Input:  klass = "chain"|"tree"|"graph"|"mapreduce"|"multilayer"; text = the
+//         class's line-oriented instance (see cli/class_io.hpp readers); opts unused.
 // Output: heap JSON {status, feasible, makespan, loads:[...], parent:[...] (graph
 //         only)} or an error object. Release with dls_free.
 char* dls_topology(const char* klassC, const char* text, const char* optsText) {
@@ -446,8 +447,19 @@ char* dls_topology(const char* klassC, const char* text, const char* optsText) {
         if (!inst.validate(&err)) return dup(errorJson("invalid instance: " + err));
         GraphSolution s = GraphSolver().solve(inst);
         emit(s.status, s.feasible(), s.makespan, s.loads, &s.parent);
+    } else if (k == "mapreduce") {
+        MapReduceInstance inst;
+        if (!readMapReduceInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+        MapReduceSolution s = MapReduceSolver().solve(inst);   // validates internally
+        emit(s.status, s.feasible(), s.makespan, s.mapperLoads, nullptr);
+    } else if (k == "multilayer") {
+        MultilayerInstance inst;
+        if (!readMultilayerInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+        MultilayerSolution s = MultilayerSolver().solve(inst); // validates internally
+        std::vector<double> none;
+        emit(s.status, s.feasible(), s.makespan, none, nullptr);
     } else {
-        return dup(errorJson("unknown topology class '" + k + "'"));
+        return dup(errorJson("unknown non-star class '" + k + "'"));
     }
     return dup(out.str());
 }

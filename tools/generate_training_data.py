@@ -23,6 +23,11 @@ seed, the regime, the oracle that set the label, whether that label is exact
 (exact ran, N <= 6), and the oracle wall-clock. `label_is_exact` lets a trainer
 select only proven-optimal rows.
 
+Phase 4: ~40% of exact-labelable instances (N <= 6) carry result-return β > 0,
+activating the `hasBeta` feature. Because β-blind heuristics (single-round,
+online) misreport makespan for β > 0, any solver whose makespan falls below the
+proven exact optimum is dropped before labelling — so β rows keep correct labels.
+
 Output: tools/training_data.csv, tools/difficulty_data.csv
 
 Usage:
@@ -87,19 +92,30 @@ def random_instance(rng, regime):
                   "B": B_base * rng.uniform(0.5, 2.0) if mem_limited else 1e18}
                  for _ in range(N)]
 
-    lines = [f"V {V:.6f}"]
+    # Phase 4: result-return β. Only for exact-labelable instances (N <= EXACT_N_LIMIT)
+    # with AMPLE memory (ΣBᵢ >= V). Two reasons: β-blind heuristics misreport makespan
+    # for β > 0 (so a correct label needs the exact optimum), and β on memory-limited
+    # instances forces many result-return round-trips whose optimum makespan explodes
+    # (up to ~1e8), a pathological corner that wrecks the regressor. ~40% of eligible.
+    ample_memory = all(p["B"] >= 1e17 for p in procs)
+    beta = 0.0
+    if N <= EXACT_N_LIMIT and ample_memory and rng.random() < 0.4:
+        beta = rng.uniform(0.1, 0.6)
+
+    lines = ([f"beta {beta:.6f}"] if beta > 0.0 else []) + [f"V {V:.6f}"]
     for p in procs:
         lines.append(f"{p['S']:.6f} {p['C']:.6f} {p['A']:.6f} {p['B']:.6e}")
-    return "\n".join(lines), V, procs
+    return "\n".join(lines), V, procs, beta
 
 # ── feature extraction (mirrors core/instance_features.hpp) ───────────────
 
 FEATURE_NAMES = ["N", "memoryRatio", "hasStartups", "hasCommCost",
                  "heteroA", "heteroC", "heteroS", "startupFraction",
                  "hasBeta", "hasCost",
-                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc"]
+                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc",
+                 "beta"]
 
-def compute_features(V, procs):
+def compute_features(V, procs, beta=0.0):
     n = len(procs)
     A = [p["A"] for p in procs]
     C = [p["C"] for p in procs]
@@ -131,7 +147,7 @@ def compute_features(V, procs):
         "heteroC": cv(C),
         "heteroS": cv(S),
         "startupFraction": startup_frac,
-        "hasBeta": 0.0,   # result return not generated in this script
+        "hasBeta": 1.0 if beta > 0.0 else 0.0,   # result-return present (Phase 4)
         "hasCost": 0.0,   # cost model not generated in this script
         "meanA": mA,
         "meanC": mC,
@@ -139,6 +155,7 @@ def compute_features(V, procs):
         "speedupA": speedupA,
         "speedupC": speedupC,
         "loadPerProc": V / n,
+        "beta": beta,   # result-return magnitude (Phase 4); hasBeta is its 0/1 flag
     }
 
 # ── per-instance task (runs in a worker process) ───────────────────────────
@@ -152,18 +169,15 @@ def task(index):
     seed = genlib.derive_seed(_SEED, index)
     rng  = random.Random(seed)
     regime = rng.choices(REGIMES, weights=REGIME_WEIGHTS)[0]
-    inst_text, V, procs = random_instance(rng, regime)
-    feats = compute_features(V, procs)
+    inst_text, V, procs, beta = random_instance(rng, regime)
+    feats = compute_features(V, procs, beta)
     N = len(procs)
 
     solvers = FAST_SOLVERS + (EXACT_SOLVERS if N <= EXACT_N_LIMIT else [])
     exact_ran = N <= EXACT_N_LIMIT
 
     import time as _t
-    best_makespan = float("inf")
-    best_solver   = None
-    best_wall     = 0.0
-    results       = {}
+    results = {}   # solver -> (makespan, wall_seconds)
     for solver in solvers:
         t0 = _t.time()
         try:
@@ -173,38 +187,49 @@ def task(index):
             elapsed = _t.time() - t0   # wall-clock, informational only (not a filter)
             sol = res.get("solution", {})
             if sol.get("status") in ("Feasible", "Optimal"):
-                ms = float(sol.get("makespan", float("inf")))
-                results[solver] = ms
-                if ms < best_makespan - 1e-9:
-                    best_makespan = ms
-                    best_solver   = solver
-                    best_wall     = elapsed
+                results[solver] = (float(sol.get("makespan", float("inf"))), elapsed)
         except Exception:
             pass
 
-    if best_solver is None or len(results) < 2:
+    if len(results) < 2:
         return None
 
-    # best_makespan is exact-optimal iff `exact` was among the solvers run
-    # (it achieves the true optimum, so the min over all solvers equals it).
+    exact_ms = results["exact"][0] if exact_ran and "exact" in results else None
+
+    # A β > 0 instance needs the exact optimum for a correct label (β-blind
+    # heuristics misreport it). If exact didn't return one, drop the instance.
+    if beta > 0.0 and exact_ms is None:
+        return None
+
+    # When the exact optimum is known, any solver reporting BELOW it is invalid for
+    # this instance — e.g. single-round / online ignore result-return β and misreport
+    # a too-low makespan. Drop them so they can't corrupt the label.
+    if exact_ms is not None:
+        valid = {s: mw for s, mw in results.items() if mw[0] >= exact_ms - 1e-6}
+    else:
+        valid = results
+
+    best_solver = min(valid, key=lambda s: valid[s][0])
+    best_makespan, best_wall = valid[best_solver]
+
     prov = genlib.provenance(seed, regime,
-                             oracle="exact" if exact_ran else "best-heuristic",
-                             label_is_exact=exact_ran,
+                             oracle="exact" if exact_ms is not None else "best-heuristic",
+                             label_is_exact=(exact_ms is not None),
                              wall_ms=best_wall * 1000.0)
     train_row = {**feats, "best_solver": best_solver,
                  "best_makespan": best_makespan, **prov, "_i": index}
 
-    # Difficulty label: gap between best heuristic and exact optimum.
-    exact_ms = results.get("exact")
-    heuristic_ms = min((results[s] for s in FAST_SOLVERS if s in results),
-                       default=float("inf"))
+    # Difficulty label: gap between the best VALID heuristic and the exact optimum.
     diff_row = None
-    if exact_ms is not None and heuristic_ms < float("inf"):
-        gap = (heuristic_ms - exact_ms) / (exact_ms + 1e-12)
-        difficulty = "easy" if gap < 0.01 else "medium" if gap < 0.10 else "hard"
-        dprov = genlib.provenance(seed, regime, oracle="exact",
-                                  label_is_exact=True, wall_ms=best_wall * 1000.0)
-        diff_row = {**feats, "difficulty": difficulty, **dprov, "_i": index}
+    if exact_ms is not None:
+        heuristic_ms = min((valid[s][0] for s in FAST_SOLVERS if s in valid),
+                           default=float("inf"))
+        if heuristic_ms < float("inf"):
+            gap = (heuristic_ms - exact_ms) / (exact_ms + 1e-12)
+            difficulty = "easy" if gap < 0.01 else "medium" if gap < 0.10 else "hard"
+            dprov = genlib.provenance(seed, regime, oracle="exact",
+                                      label_is_exact=True, wall_ms=best_wall * 1000.0)
+            diff_row = {**feats, "difficulty": difficulty, **dprov, "_i": index}
     elif N > EXACT_N_LIMIT:
         # exact intractable; heuristic quality unknown → labelled hard (not exact).
         dprov = genlib.provenance(seed, regime, oracle="best-heuristic",

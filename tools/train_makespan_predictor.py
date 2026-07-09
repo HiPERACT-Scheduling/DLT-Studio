@@ -27,7 +27,12 @@ from sklearn.tree import _tree
 FEATURE_NAMES = ["N", "memoryRatio", "hasStartups", "hasCommCost",
                  "heteroA", "heteroC", "heteroS", "startupFraction",
                  "hasBeta", "hasCost",
-                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc"]
+                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc",
+                 "beta"]
+
+# makespan/V above this is physically implausible (a sane schedule is O(max Aᵢ));
+# such rows are pathological corners that skew the log-makespan regressor.
+MAX_MAKESPAN_RATIO = 1000.0
 
 
 # ── CSV load ───────────────────────────────────────────────────────────────
@@ -35,6 +40,7 @@ FEATURE_NAMES = ["N", "memoryRatio", "hasStartups", "hasCommCost",
 def load_data(path):
     import csv
     X, y = [], []
+    dropped = 0
     with open(path) as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -43,9 +49,19 @@ def load_data(path):
             ms = float(row["best_makespan"])
             if ms <= 0:
                 continue
+            # Defensive outlier guard: makespan/V should be O(max Aᵢ) for any sane
+            # schedule; a ratio above MAX_RATIO is a pathological corner (e.g. β on
+            # memory-limited instances → many result-return round-trips, makespan
+            # ~1e8) that skews the regressor. V = loadPerProc · N.
+            V = float(row["loadPerProc"]) * float(row["N"])
+            if V > 0 and ms / V > MAX_MAKESPAN_RATIO:
+                dropped += 1
+                continue
             feats = [float(row[n]) for n in FEATURE_NAMES]
             X.append(feats)
             y.append(math.log(ms))
+    if dropped:
+        print(f"  dropped {dropped} pathological outliers (makespan/V > {MAX_MAKESPAN_RATIO})")
     return np.array(X), np.array(y)
 
 
@@ -138,6 +154,10 @@ def main():
     print(f"\nExporting C++ header to {args.out} ...")
     body = gbm_regressor_to_cpp(model, FEATURE_NAMES)
 
+    # Build the feature array straight from FEATURE_NAMES (== InstanceFeatures field
+    # names) so the C++ array can never silently drift out of sync with the model.
+    feat_lines = "\n".join(f"            static_cast<float>(features.{n})," for n in FEATURE_NAMES)
+
     header = f"""\
 //---------------------------------------------------------------------------
 // heuristics/ml/makespan_predictor.hpp
@@ -171,22 +191,7 @@ public:
     // Output: log(predicted makespan); caller takes exp() to recover T.
     static double predict(const InstanceFeatures& features) {{
         const std::array<float, kMsNumFeatures> fa = {{{{
-            static_cast<float>(features.N),
-            static_cast<float>(features.memoryRatio),
-            static_cast<float>(features.hasStartups),
-            static_cast<float>(features.hasCommCost),
-            static_cast<float>(features.heteroA),
-            static_cast<float>(features.heteroC),
-            static_cast<float>(features.heteroS),
-            static_cast<float>(features.startupFraction),
-            static_cast<float>(features.hasBeta),
-            static_cast<float>(features.hasCost),
-            static_cast<float>(features.meanA),
-            static_cast<float>(features.meanC),
-            static_cast<float>(features.meanS),
-            static_cast<float>(features.speedupA),
-            static_cast<float>(features.speedupC),
-            static_cast<float>(features.loadPerProc),
+{feat_lines}
         }}}};
         const float* f = fa.data();
         return predict_log_makespan(f);

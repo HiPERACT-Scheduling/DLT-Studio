@@ -76,7 +76,7 @@ instance, ask for `exact` directly.
 
 ## The `auto-ml` meta-solver
 
-`AutoMlSolver` (registered as `auto-ml`) extracts a **16-feature vector** from the
+`AutoMlSolver` (registered as `auto-ml`) extracts a **17-feature vector** from the
 instance (`N`, memory ratio, heterogeneity in `A/C/S`, startup fraction, mean
 rates, speedup ratios, load per processor) and feeds it into a gradient-boosted
 tree (GBM, 150 stages × 5 classes, trained on labelled DLT benchmarks) to predict
@@ -130,13 +130,28 @@ instances with `--milp-max-n` / `--milp-max-nm` (off by default: each MILP costs
 seconds, so it is practical only on capable hardware). Generation parallelises
 across `--workers` processes.
 
+**Non-star classes (`tools/generate_topology_training_data.py`).** These are the
+opposite case: their solvers are LP-exact (`chain`, `tree`) or closed-form
+(`mapreduce`, `multilayer`) and run in well under a millisecond, so datasets of
+millions are cheap even on one core (~5–10 k instances/s). Each class trains a
+standalone makespan surrogate via `tools/train_topology_predictor.py`, exported
+as a zero-dependency C++ header (`heuristics/ml/<class>_predictor.hpp`,
+`predict_log_makespan_<class>(const float*)`).
+
+Label quality per class (`label_is_exact`): `chain`/`tree` are LP-optimal and
+`mapreduce` is the proven optimum (Berlińska Prop. 4.1) → exact; `multilayer`'s
+closed form is a feasible-schedule **upper bound** on the overlapped optimum, so
+its rows are tagged non-exact (the surrogate learns the solver's output, which is
+what a `multilayer` run returns). These are the classes where an ML surrogate is
+most useful — no closed form exists for an arbitrary tree/chain optimum.
+
 ## The `ml-makespan` solver
 
 `MlSolver` (registered as `ml-makespan`) is a two-stage solver whose unique
 output is the **ML-predicted optimal makespan T\*** alongside the actual schedule:
 
 - **Stage 1** — a GBM regressor (trained on `log(T*)`) predicts the optimal
-  makespan from the 16-feature vector in < 1 µs. The prediction is reported
+  makespan from the 17-feature vector in < 1 µs. The prediction is reported
   separately as `predictedMakespan`.
 - **Stage 2** — the best applicable heuristic constructs a valid schedule:
   - `Sᵢ = 0, Cᵢ = 0`, no memory cap → `BestRateSolver` (LP-optimal here)

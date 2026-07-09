@@ -25,7 +25,8 @@ from sklearn.tree import _tree
 FEATURE_NAMES = ["N", "memoryRatio", "hasStartups", "hasCommCost",
                  "heteroA", "heteroC", "heteroS", "startupFraction",
                  "hasBeta", "hasCost",
-                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc"]
+                 "meanA", "meanC", "meanS", "speedupA", "speedupC", "loadPerProc",
+                 "beta"]
 
 
 # ── CSV load ───────────────────────────────────────────────────────────────
@@ -196,6 +197,10 @@ def main():
     print(f"\nExporting C++ header to {args.out} ...")
     body_lines, classes = gbm_to_cpp(model, FEATURE_NAMES)
 
+    # Build the feature array straight from FEATURE_NAMES (== InstanceFeatures field
+    # names) so the C++ array can never silently drift out of sync with the model.
+    feat_lines = "\n".join(f"            static_cast<float>(features.{n})," for n in FEATURE_NAMES)
+
     n_trees  = args.trees * len(classes)
     header = f"""\
 //---------------------------------------------------------------------------
@@ -233,16 +238,7 @@ public:
     // Output: solver name string (matches registry keys: "ga", "exact", ...).
     static std::string predict(const InstanceFeatures& features) {{
         const std::array<float, kNumFeatures> f = {{
-            static_cast<float>(features.N),
-            static_cast<float>(features.memoryRatio),
-            static_cast<float>(features.hasStartups),
-            static_cast<float>(features.hasCommCost),
-            static_cast<float>(features.heteroA),
-            static_cast<float>(features.heteroC),
-            static_cast<float>(features.heteroS),
-            static_cast<float>(features.startupFraction),
-            static_cast<float>(features.hasBeta),
-            static_cast<float>(features.hasCost),
+{feat_lines}
         }};
         double scores[kNumClasses] = {{}};
         accumulate_scores(f.data(), scores);

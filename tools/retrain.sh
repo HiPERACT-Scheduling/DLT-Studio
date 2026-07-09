@@ -48,8 +48,22 @@ echo "--- Step 2c: train makespan predictor GBM and export C++ header ---"
 python3 tools/train_makespan_predictor.py --depth "$DEPTH" --trees "$TREES"
 
 echo "--- Step 2d: generate MLSD training data and train MLSD Cmax predictor ---"
-python3 tools/generate_mlsd_training_data.py --workers "$WORKERS"
+# Keep the exact mlsd-milp oracle on for small instances (Phase 2): raises the
+# exact-labelled fraction. Set MLSD_MILP_N=0 to disable (falls back to mlsd-ga).
+MLSD_MILP_N=${MLSD_MILP_N:-3}
+python3 tools/generate_mlsd_training_data.py --workers "$WORKERS" \
+        --milp-max-n "$MLSD_MILP_N" --milp-max-nm 9
 python3 tools/train_mlsd_predictor.py --depth "$DEPTH" --trees "$TREES"
+
+echo "--- Step 2e: non-star classes (chain, tree, mapreduce, multilayer) — fast exact labels ---"
+# These oracles are sub-millisecond (LP-exact / closed-form), so scale up the
+# sample count for free. multilayer's label is a feasible upper bound, not the
+# proven optimum (recorded as label_is_exact=0 in its rows).
+TOPO_N=${TOPO_N:-100000}
+for cls in chain tree mapreduce multilayer; do
+  python3 tools/generate_topology_training_data.py --class "$cls" --n "$TOPO_N" --workers "$WORKERS"
+  python3 tools/train_topology_predictor.py --class "$cls" --depth "$DEPTH" --trees "$TREES"
+done
 
 echo "--- Step 3: rebuild libdls_c.so (HiGHS build) ---"
 cmake --build build-highs --target dls_c
@@ -62,4 +76,4 @@ else
   echo "(dls-studio not running, skip restart)"
 fi
 
-echo "=== Done. auto-ml, difficulty, makespan and MLSD predictors are using trained models. ==="
+echo "=== Done. auto-ml, difficulty, makespan, MLSD and non-star (chain/tree/mapreduce/multilayer) predictors trained. ==="

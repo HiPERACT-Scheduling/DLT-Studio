@@ -5,3 +5,8 @@ mlsd_training_data.csv
 __pycache__/
 *.pyc
 *.ga-bak
+chain_training_data.csv
+tree_training_data.csv
+graph_training_data.csv
+mapreduce_training_data.csv
+multilayer_training_data.csv

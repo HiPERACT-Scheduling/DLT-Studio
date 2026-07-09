@@ -6,8 +6,8 @@
 // Used by the ML-assisted solver selector (heuristics/auto/solver_selector.hpp)
 // and the instance difficulty predictor (heuristics/auto/difficulty_predictor.hpp).
 //
-// All 10 features are dimensionless ratios or counts so they are stable across
-// different load scales and time units.
+// The 17 features are dimensionless ratios, counts, or fractions so they are
+// stable across different load scales and time units.
 //
 //---------------------------------------------------------------------------
 
@@ -15,6 +15,7 @@
 #define DLS_CORE_INSTANCE_FEATURES_HPP
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -46,15 +47,18 @@ struct InstanceFeatures {
     double speedupA;       // maxAᵢ / minAᵢ — heavy-tail sensitivity beyond CV
     double speedupC;       // maxCᵢ / minCᵢ (1 when all Cᵢ = 0)
     double loadPerProc;    // V / N — workload density per processor
+    // --- result-return magnitude (Phase 4) ---
+    double beta;           // β result-return fraction (0 = none); hasBeta is its 0/1 flag
 
-    static constexpr int SIZE = 16;
+    static constexpr int SIZE = 17;
 
     // Return features as a plain array in canonical order (matches training CSV columns).
     std::array<double, SIZE> toArray() const {
         return {N, memoryRatio, hasStartups, hasCommCost,
                 heteroA, heteroC, heteroS, startupFraction,
                 hasBeta, hasCost,
-                meanA, meanC, meanS, speedupA, speedupC, loadPerProc};
+                meanA, meanC, meanS, speedupA, speedupC, loadPerProc,
+                beta};
     }
 };
 
@@ -120,6 +124,7 @@ inline InstanceFeatures computeFeatures(const DLSInstance& inst) {
         .speedupA        = spA,
         .speedupC        = spC,
         .loadPerProc     = (n > 0) ? V / n : 0.0,
+        .beta            = inst.resultFraction(),
     };
 }
 

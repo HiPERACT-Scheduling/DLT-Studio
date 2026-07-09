@@ -56,6 +56,8 @@ def get_lib():
         lib.dls_solve.argtypes      = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
         lib.dls_mlsd_solve.restype  = ctypes.c_void_p
         lib.dls_mlsd_solve.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+        lib.dls_topology.restype    = ctypes.c_void_p
+        lib.dls_topology.argtypes   = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
         lib.dls_free.argtypes       = [ctypes.c_void_p]
         _LIB = lib
     return _LIB
@@ -79,6 +81,15 @@ def mlsd_solve(instance_text, solver, opts_dict=None):
     """Goal: run an MLSD solver. Output: parsed JSON response dict."""
     lib  = get_lib()
     ptr  = lib.dls_mlsd_solve(instance_text.encode(), solver.encode(), _encode_opts(opts_dict))
+    raw  = ctypes.cast(ptr, ctypes.c_char_p).value
+    lib.dls_free(ptr)
+    return json.loads(raw)
+
+def topology_solve(klass, instance_text, opts_dict=None):
+    """Goal: solve a non-star topology (chain|tree|graph) via its exact LP/enum
+    solver. Output: parsed JSON {status, feasible, makespan, loads, ...}."""
+    lib  = get_lib()
+    ptr  = lib.dls_topology(klass.encode(), instance_text.encode(), _encode_opts(opts_dict))
     raw  = ctypes.cast(ptr, ctypes.c_char_p).value
     lib.dls_free(ptr)
     return json.loads(raw)
