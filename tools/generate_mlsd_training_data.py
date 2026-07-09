@@ -16,6 +16,15 @@ the regime, the oracle (mlsd-exact vs mlsd-ga), whether the label is exact
 (mlsd-exact ran, i.e. nTasks·nProcs <= 4), and the oracle wall-clock. Downstream
 training can filter on label_is_exact to keep only proven-optimal Cmax labels.
 
+Result-return (beta): mlsd_evaluator.hpp models beta correctly for both mlsd-exact
+and mlsd-ga (they share the same LP evaluator), so beta > 0 is safe there. It is
+sampled only on ample-memory regimes: the return-communication term sums a
+per-processor-slot startup cost across every (task, slot) in the whole schedule,
+so on memory-limited instances (many slots, forced by tight buffers) beta can
+blow up Cmax the same way it did for the single-load generator before that fix.
+mlsd-milp does not model beta at all (see exact/milp/mlsd_milp_solver.hpp) and is
+never selected when beta > 0, regardless of its size gate.
+
 Output: tools/mlsd_training_data.csv
 
 Usage:
@@ -35,20 +44,29 @@ REGIMES = [0, 1, 2, 3]
 WEIGHTS = [0.25, 0.25, 0.25, 0.25]
 
 FEATURE_NAMES = ["nTasks", "nProcs", "meanV", "cvV", "maxMinV", "totalLoadPerProc",
-                 "memoryRatio", "meanA", "heteroA", "speedupA", "hasStartups", "hasCommCost"]
+                 "memoryRatio", "meanA", "heteroA", "speedupA", "hasStartups", "hasCommCost",
+                 "beta"]
+
+# Regimes with ample memory (B = 1e18) — safe to add beta to. Regime 2 is
+# memory-limited and stays beta = 0 (see the module docstring for why).
+AMPLE_MEMORY_REGIMES = {0, 1, 3}
 
 # ── instance generation ────────────────────────────────────────────────────
 
 def random_mlsd_instance(rng, regime):
-    """Return (instance_text, n_tasks, n_procs, tasks, procs)."""
+    """Return (instance_text, n_tasks, n_procs, tasks, procs, beta)."""
+    beta = 0.0
+    if regime in AMPLE_MEMORY_REGIMES and rng.random() < 0.4:
+        beta = rng.uniform(0.1, 0.6)
+
     if regime == 0:
         n, m = rng.randint(2, 4), rng.randint(2, 6)
-        tasks = [{"V": rng.uniform(100, 3000), "beta": 0.0} for _ in range(n)]
+        tasks = [{"V": rng.uniform(100, 3000), "beta": beta} for _ in range(n)]
         procs = [{"S": 0.0, "C": rng.uniform(0.01, 1.0),
                   "A": rng.uniform(0.1, 2.0), "B": 1e18} for _ in range(m)]
     elif regime == 1:
         n, m = rng.randint(2, 5), rng.randint(2, 5)
-        tasks = [{"V": rng.uniform(100, 5000), "beta": 0.0} for _ in range(n)]
+        tasks = [{"V": rng.uniform(100, 5000), "beta": beta} for _ in range(n)]
         procs = [{"S": rng.uniform(0, 0.5), "C": rng.uniform(0, 1.0),
                   "A": rng.uniform(0.1, 2.0), "B": 1e18} for _ in range(m)]
     elif regime == 2:
@@ -60,7 +78,7 @@ def random_mlsd_instance(rng, regime):
                  for _ in range(m)]
     else:
         n, m = rng.randint(3, 6), rng.randint(3, 8)
-        tasks = [{"V": rng.uniform(50, 8000), "beta": 0.0} for _ in range(n)]
+        tasks = [{"V": rng.uniform(50, 8000), "beta": beta} for _ in range(n)]
         procs = [{"S": rng.uniform(0, 1.0) if rng.random() > 0.4 else 0.0,
                   "C": rng.uniform(0, 1.0), "A": rng.uniform(0.05, 3.0), "B": 1e18}
                  for _ in range(m)]
@@ -70,9 +88,9 @@ def random_mlsd_instance(rng, regime):
         lines.append(f"task {t['V']:.6f} {t['beta']:.6f}")
     for p in procs:
         lines.append(f"proc {p['S']:.6f} {p['C']:.6f} {p['A']:.6f} {p['B']:.6e}")
-    return "\n".join(lines), n, m, tasks, procs
+    return "\n".join(lines), n, m, tasks, procs, beta
 
-def compute_mlsd_features(tasks, procs):
+def compute_mlsd_features(tasks, procs, beta=0.0):
     n = len(tasks)
     m = len(procs)
     V = [t["V"] for t in tasks]
@@ -107,6 +125,7 @@ def compute_mlsd_features(tasks, procs):
         "speedupA": speedupA,
         "hasStartups": 1.0 if any(s > 0 for s in S) else 0.0,
         "hasCommCost": 1.0 if any(c > 0 for c in C) else 0.0,
+        "beta": beta,
     }
 
 # ── oracle policy ──────────────────────────────────────────────────────────
@@ -126,10 +145,12 @@ _SEED        = 42   # overwritten in main() before the pool forks; inherited by 
 _MILP_MAX_N  = 0    # enable mlsd-milp for n <= this   (0 = MILP oracle disabled)
 _MILP_MAX_NM = 0    # ... and n*m <= this
 
-def choose_oracle(n, m):
+def choose_oracle(n, m, beta):
     """Goal: pick the label oracle for an (n tasks, m procs) instance by the
-    deterministic size gate. Output: (solver_name, label_is_exact)."""
-    if _MILP_MAX_N and n <= _MILP_MAX_N and n * m <= _MILP_MAX_NM:
+    deterministic size gate. Output: (solver_name, label_is_exact).
+    mlsd-milp does not model result-return at all (mlsd_milp_solver.hpp: "beta = 0
+    only"), so it is never selected when beta > 0, regardless of its size gate."""
+    if beta == 0.0 and _MILP_MAX_N and n <= _MILP_MAX_N and n * m <= _MILP_MAX_NM:
         return "mlsd-milp", True
     if n * m <= EXACT_LIMIT:
         return "mlsd-exact", True
@@ -142,10 +163,10 @@ def task(index):
     seed = genlib.derive_seed(_SEED, index)
     rng  = random.Random(seed)
     regime = rng.choices(REGIMES, weights=WEIGHTS)[0]
-    inst_text, n, m, tasks, procs = random_mlsd_instance(rng, regime)
-    feats = compute_mlsd_features(tasks, procs)
+    inst_text, n, m, tasks, procs, beta = random_mlsd_instance(rng, regime)
+    feats = compute_mlsd_features(tasks, procs, beta)
 
-    solver, exact = choose_oracle(n, m)
+    solver, exact = choose_oracle(n, m, beta)
 
     t0 = _t.time()
     try:

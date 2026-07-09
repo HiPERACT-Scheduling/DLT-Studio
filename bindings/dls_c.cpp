@@ -11,11 +11,15 @@
 //
 // Options are a flat "key=value;key=value" string (so no JSON parser is needed):
 //   solver         already passed separately
-//   maxInstallments, nodeBudget, populationSize, maxGenerations  (integers)
-//   costLimit, deadline, epsilon                                 (doubles)
+//   maxInstallments, nodeBudget, populationSize, maxGenerations,
+//   noImprovementLimit, chunkDivisor                              (integers)
+//   costLimit, deadline, epsilon, makespanLimit                  (doubles)
 //   seed                                                         (uint64)
 //   backend  = simplex|highs        allowRepeats = 0|1
 //   chunk    = ssc|gss              psr = compute|comm|startup|memory|energy|super
+//   warmStart    = 0|1  (exact: seed the incumbent from heuristics; default 1)
+//   minimizeCost = 0|1  (exact-milp: minimize cost/energy G s.t. Cmax <= makespanLimit,
+//                        instead of the default minimize Cmax s.t. G <= costLimit)
 //---------------------------------------------------------------------------
 
 #include <algorithm>
@@ -148,7 +152,12 @@ char* dls_solve(const char* instanceText, const char* solverName, const char* op
             else if (k == "nodeBudget")      opt.nodeBudget = std::stol(v);
             else if (k == "populationSize")  opt.populationSize = std::stoi(v);
             else if (k == "maxGenerations")  opt.maxGenerations = std::stoi(v);
+            else if (k == "noImprovementLimit") opt.noImprovementLimit = std::stoi(v);
+            else if (k == "chunkDivisor")    opt.chunkDivisor = std::stoi(v);
+            else if (k == "warmStart")       opt.warmStart = (v != "0" && v != "false");
             else if (k == "costLimit")       opt.costLimit = std::stod(v);
+            else if (k == "minimizeCost")    opt.minimizeCost = (v != "0" && v != "false");
+            else if (k == "makespanLimit")   opt.makespanLimit = std::stod(v);
             else if (k == "deadline")        opt.deadline = std::stod(v);
             else if (k == "epsilon")         opt.epsilon = std::stod(v);
             else if (k == "autoEpsilon")     opt.autoEpsilon = (v != "0" && v != "false");

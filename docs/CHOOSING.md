@@ -145,6 +145,24 @@ its rows are tagged non-exact (the surrogate learns the solver's output, which i
 what a `multilayer` run returns). These are the classes where an ML surrogate is
 most useful — no closed form exists for an arbitrary tree/chain optimum.
 
+**Energy (`tools/generate_energy_training_data.py`).** Minimizing energy directly
+(rather than makespan) was previously only reachable by constructing
+`MilpParams{minimizeCost=true}` in C++ — no solver name or CLI flag exposed it.
+It is now reachable through the existing `exact-milp` solver via a
+`minimizeCost=1` option (`bindings/dls_c.cpp`, `core/solver_registry.hpp`): when
+the instance uses the energy model (any of `powerIdle`/`powerStartup`/
+`powerNetwork`/`energyPieces` set), this minimizes total energy instead of Cmax,
+proven optimal via HiGHS (validated against the thesis's hand-computed example
+and the MinCost-vs-MinMakespan divergence test in `lib/tests/tests.cpp`).
+
+Unlike the other oracles, energy-mode MILP cost grows steeply with `N`
+(calibrated: N=7 ≈3s, N=8 ≈5s, N=9 already exceeds 20s), so
+`tools/generate_energy_training_data.py` gates generation to `N ≤ 8` by default
+(`--exact-max-n`) — every row is still exact, just capped in scale accordingly
+(tens of thousands, not millions, at this instance size). `tools/train_energy_predictor.py`
+exports `heuristics/ml/energy_predictor.hpp` (`predict_log_energy(const float*)`),
+following the same standalone-header pattern as the topology predictors.
+
 ## The `ml-makespan` solver
 
 `MlSolver` (registered as `ml-makespan`) is a two-stage solver whose unique

@@ -58,6 +58,8 @@ struct SolverOptions {
     double epsilon           = 0.1;     // fptas: approximation precision
     bool   autoEpsilon       = false;   // fptas: derive ε from instance features
     double costLimit         = std::numeric_limits<double>::infinity();  // bi-criteria G-bar
+    bool   minimizeCost      = false;   // exact-milp: minimize cost/energy G instead of Cmax
+    double makespanLimit     = std::numeric_limits<double>::infinity();  // exact-milp: C-bar, used when minimizeCost
     int    populationSize    = 12;      // GA
     int    maxGenerations    = 200;     // GA
     int    noImprovementLimit = 60;     // GA
@@ -163,7 +165,11 @@ inline std::unique_ptr<DLSSolver> makeSolver(const std::string& name,
     }
 #ifdef DLS_WITH_HIGHS
     if (name == "exact-milp") {
-        MilpParams p; p.maxInstallments = opt.maxInstallments; p.costLimit = opt.costLimit;
+        MilpParams p;
+        p.maxInstallments = opt.maxInstallments;
+        p.costLimit       = opt.costLimit;
+        p.minimizeCost    = opt.minimizeCost;
+        p.makespanLimit   = opt.makespanLimit;
         return std::make_unique<MilpSolver>(p);
     }
     if (name == "milp-multi") {
