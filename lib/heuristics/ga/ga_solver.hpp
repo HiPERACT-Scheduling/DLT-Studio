@@ -35,6 +35,7 @@
 #include "core/dls_instance.hpp"
 #include "core/dls_solution.hpp"
 #include "core/dls_solver.hpp"
+#include "core/energy_model.hpp"                // scheduleEnergy
 #include "core/evaluator_factory.hpp"           // backend selection by name
 #include "core/caching_schedule_evaluator.hpp"  // memoizes solves by sequence
 #include "util/random.hpp"                       // injectable RNG
@@ -253,7 +254,8 @@ private:
             busTime += p.commStartup + p.commRate * gene.dataSize;  // t_{i+1} = t_i + S + C·α_i
             result.fragments.push_back(frag);
         }
-        result.cost = scheduleCost(instanceForCost, result.fragments);
+        result.cost   = scheduleCost(instanceForCost, result.fragments);
+        result.energy = scheduleEnergy(instanceForCost, result.fragments, result.makespan);
     }
 };
 

@@ -33,11 +33,19 @@
 #include "bench/benchmark.hpp"          // computePerformanceMap, runBenchmark
 #include "cli/class_io.hpp"             // chain/tree/graph readers + topology solvers + readMlsdInstance
 #include "mapreduce/mapreduce_solver.hpp"  // closed-form MapReduce (multilayer solver comes via class_io.hpp)
+#include "mapreduce/reducer_read_instance.hpp"
+#include "mapreduce/mapreduce_skew_instance.hpp"
+#include "mapreduce/skew_static_solver.hpp"
+#include "mapreduce/skew_dynamic_solver.hpp"
 #include "mlsd/mlsd_solver.hpp"
 #include "mlsd/mlsd_ga_solver.hpp"
 #include "heuristics/ml/ml_mlsd_solver.hpp"
+#include "mapreduce/multisource_instance.hpp"
 #ifdef DLS_WITH_HIGHS
 #include "exact/milp/mlsd_milp_solver.hpp"   // exact MLSD oracle (β = 0), HiGHS build only
+#include "exact/branch_and_price/reducer_read_bp_solver.hpp"  // heterogeneous multi-channel reducer read scheduling
+#include "mapreduce/mapreduce_bwidth_solver.hpp"               // bisection-width-limited MapReduce ("third method")
+#include "mapreduce/multisource_solver.hpp"                     // multi-source map-phase scheduling LP
 #endif
 #include "core/bounds.hpp"
 #include "core/instance_features.hpp"
@@ -203,6 +211,11 @@ char* dls_solve(const char* instanceText, const char* solverName, const char* op
     // ML solver: report the ML-predicted makespan alongside the scheduled one.
     if (auto* s = dynamic_cast<MlSolver*>(solver.get()))
         out << ",\"predictedMakespan\":" << json::num(s->predictedMakespan());
+    // ML energy solver: report the ML-predicted minimum energy alongside the
+    // scheduled one (see ml_energy_solver.hpp — they are not expected to match
+    // exactly, since Stage 2 still ultimately minimizes makespan).
+    if (auto* s = dynamic_cast<EnergyMlSolver*>(solver.get()))
+        out << ",\"predictedEnergy\":" << json::num(s->predictedEnergy());
     // Instance difficulty prediction (property of the instance, solver-independent).
     out << ",\"difficulty\":" << json::str(DifficultyPredictor::predict(computeFeatures(inst)));
     out << ",\"instance\":"; writeInstanceJson(out, inst);
@@ -216,7 +229,8 @@ char* dls_solve(const char* instanceText, const char* solverName, const char* op
 // Input:  instanceText - task/proc format (see cli/class_io.hpp readMlsdInstance);
 //         solverName   - "mlsd-exact" | "mlsd-ga";
 //         optsText     - "key=value;..." options (maxInstallments, seed).
-// Output: heap JSON {solver, makespan, status} or error. Release with dls_free.
+// Output: heap JSON {solver, status, makespan, taskOrder, loads:[[..],...],
+// predictedMakespan (ml-mlsd only)} or an error object. Release with dls_free.
 char* dls_mlsd_solve(const char* instanceText, const char* solverName, const char* optsText) {
     MlsdInstance inst;
     std::string err;
@@ -226,45 +240,41 @@ char* dls_mlsd_solve(const char* instanceText, const char* solverName, const cha
     Opts o = parseOptsT(optsText);
     const std::string sname = solverName ? solverName : "mlsd-exact";
 
-    std::ostringstream out;
-    out << "{\"solver\":" << json::str(sname);
+    auto emit = [&](const MlsdSolution& sol, double predictedMakespan, bool havePrediction) {
+        std::ostringstream out;
+        out << "{\"solver\":" << json::str(sname)
+            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
+                                        : sol.status == SolveStatus::Feasible ? "Feasible"
+                                        : "Failure")
+            << ",\"makespan\":" << json::num(sol.makespan);
+        if (havePrediction) out << ",\"predictedMakespan\":" << json::num(predictedMakespan);
+        out << ",\"taskOrder\":[";
+        for (std::size_t i = 0; i < sol.taskOrder.size(); ++i) out << (i ? "," : "") << sol.taskOrder[i];
+        out << "],\"loads\":[";
+        for (std::size_t l = 0; l < sol.loads.size(); ++l) {
+            out << (l ? "," : "") << "[";
+            for (std::size_t k = 0; k < sol.loads[l].size(); ++k)
+                out << (k ? "," : "") << json::num(sol.loads[l][k]);
+            out << "]";
+        }
+        out << "]}";
+        return out.str();
+    };
 
     if (sname == "mlsd-exact") {
-        MlsdSolver solver;
-        MlsdSolution sol = solver.solve(inst);
-        out << ",\"makespan\":" << json::num(sol.makespan)
-            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
-                                        : sol.status == SolveStatus::Feasible ? "Feasible"
-                                        : "Failure");
+        return dup(emit(MlsdSolver().solve(inst), 0.0, false));
     } else if (sname == "mlsd-ga") {
-        MlsdGaSolver solver{MlsdGaSolver::Params{}};
-        MlsdSolution sol = solver.solve(inst);
-        out << ",\"makespan\":" << json::num(sol.makespan)
-            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
-                                        : sol.status == SolveStatus::Feasible ? "Feasible"
-                                        : "Failure");
+        return dup(emit(MlsdGaSolver(MlsdGaSolver::Params{}).solve(inst), 0.0, false));
     } else if (sname == "ml-mlsd") {
         MlMlsdSolver solver;
         MlsdSolution sol = solver.solve(inst);
-        out << ",\"predictedMakespan\":" << json::num(solver.predictedMakespan())
-            << ",\"makespan\":" << json::num(sol.makespan)
-            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
-                                        : sol.status == SolveStatus::Feasible ? "Feasible"
-                                        : "Failure");
+        return dup(emit(sol, solver.predictedMakespan(), true));
 #ifdef DLS_WITH_HIGHS
     } else if (sname == "mlsd-milp") {
-        MlsdMilpSolver solver{MlsdMilpParams{}};
-        MlsdSolution sol = solver.solve(inst);
-        out << ",\"makespan\":" << json::num(sol.makespan)
-            << ",\"status\":" << json::str(sol.status == SolveStatus::Optimal ? "Optimal"
-                                        : sol.status == SolveStatus::Feasible ? "Feasible"
-                                        : "Failure");
+        return dup(emit(MlsdMilpSolver(MlsdMilpParams{}).solve(inst), 0.0, false));
 #endif
-    } else {
-        return dup(errorJson(std::string("unknown MLSD solver '") + sname + "'"));
     }
-    out << "}";
-    return dup(out.str());
+    return dup(errorJson(std::string("unknown MLSD solver '") + sname + "'"));
 }
 
 // Goal:   time–energy Pareto front for an instance (GUI "trade-off explorer").
@@ -346,8 +356,8 @@ char* dls_map(const char* optsText) {
     if (c.baseProcessors  <  1)   return dup("{\"error\":\"procs must be >= 1\"}");
     if (c.xSteps          <  1)   return dup("{\"error\":\"xsteps must be >= 1\"}");
     if (c.ySteps          <  1)   return dup("{\"error\":\"ysteps must be >= 1\"}");
-    if (c.xMin >= c.xMax)         return dup("{\"error\":\"xmin must be < xmax\"}");
-    if (c.yMin >= c.yMax)         return dup("{\"error\":\"ymin must be < ymax\"}");
+    if (c.xSteps > 1 && c.xMin >= c.xMax) return dup("{\"error\":\"xmin must be < xmax\"}");
+    if (c.ySteps > 1 && c.yMin >= c.yMax) return dup("{\"error\":\"ymin must be < ymax\"}");
 
     bench::PerformanceMap m = bench::computePerformanceMap(c);
     auto arr = [](std::ostringstream& s, const std::vector<double>& v) {
@@ -460,18 +470,222 @@ char* dls_topology(const char* klassC, const char* text, const char* optsText) {
         MapReduceInstance inst;
         if (!readMapReduceInstance(in, inst, err)) return dup(errorJson("parse: " + err));
         MapReduceSolution s = MapReduceSolver().solve(inst);   // validates internally
-        emit(s.status, s.feasible(), s.makespan, s.mapperLoads, nullptr);
+        out << "{\"status\":" << json::str(json::statusName(s.status))
+            << ",\"feasible\":" << (s.feasible() ? "true" : "false")
+            << ",\"makespan\":" << json::num(s.makespan)
+            << ",\"reducerTime\":" << json::num(s.reducerTime)
+            << ",\"loads\":[";
+        for (std::size_t i = 0; i < s.mapperLoads.size(); ++i) out << (i ? "," : "") << json::num(s.mapperLoads[i]);
+        out << "],\"mapperOrder\":[";
+        for (std::size_t i = 0; i < s.mapperOrder.size(); ++i) out << (i ? "," : "") << s.mapperOrder[i];
+        out << "]}";
     } else if (k == "multilayer") {
         MultilayerInstance inst;
         if (!readMultilayerInstance(in, inst, err)) return dup(errorJson("parse: " + err));
         MultilayerSolution s = MultilayerSolver().solve(inst); // validates internally
-        std::vector<double> none;
-        emit(s.status, s.feasible(), s.makespan, none, nullptr);
+        out << "{\"status\":" << json::str(json::statusName(s.status))
+            << ",\"feasible\":" << (s.feasible() ? "true" : "false")
+            << ",\"makespan\":" << json::num(s.makespan)
+            << ",\"mapperTime\":" << json::num(s.mapperTime)
+            << ",\"layerInput\":[";
+        for (std::size_t i = 0; i < s.layerInput.size(); ++i) out << (i ? "," : "") << json::num(s.layerInput[i]);
+        out << "],\"layerRead\":[";
+        for (std::size_t i = 0; i < s.layerRead.size(); ++i) out << (i ? "," : "") << json::num(s.layerRead[i]);
+        out << "],\"layerCompute\":[";
+        for (std::size_t i = 0; i < s.layerCompute.size(); ++i) out << (i ? "," : "") << json::num(s.layerCompute[i]);
+        out << "]}";
     } else {
         return dup(errorJson("unknown non-star class '" + k + "'"));
     }
     return dup(out.str());
 }
+
+// Goal:   solve a reducer partitioning-skew instance with the static
+//         (fine-partitioning + LPT bin-packing) mitigation algorithm (see
+//         mapreduce/skew_static_solver.hpp). Dependency-free.
+// Input:  instanceText - the mapreduce-skew class instance text (V/mappers/
+//         mapper_rate/readrate/gamma0/epsilon/bisection/reducers/sort_rate/
+//         reduce_rate/master_rate/k, plus k*r "partition <size>" lines);
+//         solverName, optsText unused.
+// Output: heap JSON {status, makespan, masterTime, reducerLoads,
+//         assignment:[[partitionIdx,...],...]} or an error object.
+char* dls_skew_static_solve(const char* instanceText, const char* /*solverName*/,
+                           const char* /*optsText*/) {
+    MapReduceSkewInstance inst;
+    std::string err;
+    std::istringstream in(instanceText ? instanceText : "");
+    if (!readMapReduceSkewInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+    if (!inst.validate(&err)) return dup(errorJson("invalid instance: " + err));
+
+    StaticSkewSolution sol = StaticSkewSolver().solve(inst);
+
+    std::ostringstream out;
+    out << "{\"status\":" << json::str(json::statusName(sol.status))
+        << ",\"feasible\":" << (sol.feasible() ? "true" : "false")
+        << ",\"makespan\":" << json::num(sol.makespan)
+        << ",\"masterTime\":" << json::num(sol.masterTime)
+        << ",\"reducerLoads\":[";
+    for (std::size_t j = 0; j < sol.reducerLoads.size(); ++j) out << (j ? "," : "") << json::num(sol.reducerLoads[j]);
+    out << "],\"assignment\":[";
+    for (std::size_t j = 0; j < sol.assignment.size(); ++j) {
+        out << (j ? "," : "") << "[";
+        for (std::size_t p = 0; p < sol.assignment[j].size(); ++p)
+            out << (p ? "," : "") << sol.assignment[j][p];
+        out << "]";
+    }
+    out << "]}";
+    return dup(out.str());
+}
+
+// Goal:   solve a reducer partitioning-skew instance with the dynamic
+//         (single-shot post-sort rebalancing) mitigation algorithm (see
+//         mapreduce/skew_dynamic_solver.hpp). Dependency-free. Requires k=1
+//         (the base r-way partition — see the solver's header for why).
+// Input:  instanceText - same format as dls_skew_static_solve, but with
+//         exactly r "partition <size>" lines (k must be 1 or omitted).
+// Output: heap JSON {status, makespan, unmitigatedMakespan, triggerTime,
+//         numBusyAtTrigger, sendersUsed} or an error object.
+char* dls_skew_dynamic_solve(const char* instanceText, const char* /*solverName*/,
+                            const char* /*optsText*/) {
+    MapReduceSkewInstance inst;
+    std::string err;
+    std::istringstream in(instanceText ? instanceText : "");
+    if (!readMapReduceSkewInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+    if (!inst.validate(&err)) return dup(errorJson("invalid instance: " + err));
+
+    DynamicSkewSolution sol = DynamicSkewSolver().solve(inst);
+
+    std::ostringstream out;
+    out << "{\"status\":" << json::str(json::statusName(sol.status))
+        << ",\"feasible\":" << (sol.feasible() ? "true" : "false")
+        << ",\"makespan\":" << json::num(sol.makespan)
+        << ",\"unmitigatedMakespan\":" << json::num(sol.unmitigatedMakespan)
+        << ",\"triggerTime\":" << json::num(sol.triggerTime)
+        << ",\"numBusyAtTrigger\":" << sol.numBusyAtTrigger
+        << ",\"sendersUsed\":" << sol.sendersUsed
+        << "}";
+    return dup(out.str());
+}
+
+#ifdef DLS_WITH_HIGHS
+// Goal:   solve a MapReduce instance under a bisection-width read-channel
+//         limit (see mapreduce/mapreduce_bwidth_solver.hpp, the "third
+//         method" LP). HiGHS build only.
+// Input:  instanceText - the standard mapreduce class instance text (V/
+//         startup/readrate/gamma0/reducers/reducer_startup/reducer_rate/
+//         mapper, plus the optional "bisection <l>" directive); solverName,
+//         optsText unused (one algorithm, no runtime options).
+// Output: heap JSON {status, makespan, reducerTime, mapperOrder, loads} or
+//         an error object. Release with dls_free.
+char* dls_mapreduce_bwidth_solve(const char* instanceText, const char* /*solverName*/,
+                                 const char* /*optsText*/) {
+    MapReduceInstance inst;
+    std::string err;
+    std::istringstream in(instanceText ? instanceText : "");
+    if (!readMapReduceInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+    if (!inst.validate(&err)) return dup(errorJson("invalid instance: " + err));
+
+    MapReduceBwidthSolution sol = MapReduceBwidthSolver().solve(inst);
+
+    std::ostringstream out;
+    out << "{\"status\":" << json::str(json::statusName(sol.status))
+        << ",\"feasible\":" << (sol.feasible() ? "true" : "false")
+        << ",\"makespan\":" << json::num(sol.makespan)
+        << ",\"reducerTime\":" << json::num(sol.reducerTime)
+        << ",\"loads\":[";
+    for (std::size_t i = 0; i < sol.mapperLoads.size(); ++i) out << (i ? "," : "") << json::num(sol.mapperLoads[i]);
+    out << "],\"mapperOrder\":[";
+    for (std::size_t i = 0; i < sol.mapperOrder.size(); ++i) out << (i ? "," : "") << sol.mapperOrder[i];
+    out << "]}";
+    return dup(out.str());
+}
+#endif
+
+#ifdef DLS_WITH_HIGHS
+// Goal:   solve a multi-source map-phase scheduling instance (see
+//         mapreduce/multisource_solver.hpp). HiGHS build only.
+// Input:  instanceText - the multisource class instance text (S/m/n/rate/
+//         transfer, plus optional "storage <S_i>" lines selecting the
+//         fixed-supply variant); solverName, optsText unused.
+// Output: heap JSON {status, makespan, storageSizes, localLoads,
+//         transfers:[{from,to,size},...], fixedSupply} or an error object.
+char* dls_multisource_solve(const char* instanceText, const char* /*solverName*/,
+                           const char* /*optsText*/) {
+    MultiSourceInstance inst;
+    std::string err;
+    std::istringstream in(instanceText ? instanceText : "");
+    if (!readMultiSourceInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+    if (!inst.validate(&err)) return dup(errorJson("invalid instance: " + err));
+
+    MultiSourceSolution sol = MultiSourceSolver().solve(inst);
+
+    std::ostringstream out;
+    out << "{\"status\":" << json::str(json::statusName(sol.status))
+        << ",\"feasible\":" << (sol.feasible() ? "true" : "false")
+        << ",\"fixedSupply\":" << (inst.isFixedSupply() ? "true" : "false")
+        << ",\"makespan\":" << json::num(sol.makespan)
+        << ",\"storageSizes\":[";
+    for (std::size_t i = 0; i < sol.storageSizes.size(); ++i) out << (i ? "," : "") << json::num(sol.storageSizes[i]);
+    out << "],\"localLoads\":[";
+    for (std::size_t i = 0; i < sol.localLoads.size(); ++i) out << (i ? "," : "") << json::num(sol.localLoads[i]);
+    out << "],\"transfers\":[";
+    bool first = true;
+    for (std::size_t i = 0; i < sol.transferLoads.size(); ++i)
+        for (std::size_t j = 0; j < sol.transferLoads[i].size(); ++j)
+            if (i != j && sol.transferLoads[i][j] > 1e-9) {
+                out << (first ? "" : ",") << "{\"from\":" << i << ",\"to\":" << j
+                    << ",\"size\":" << json::num(sol.transferLoads[i][j]) << "}";
+                first = false;
+            }
+    out << "]}";
+    return dup(out.str());
+}
+#endif
+
+#ifdef DLS_WITH_HIGHS
+// Goal:   solve a heterogeneous multi-channel reducer read scheduling
+//         instance (see mapreduce/reducer_read_instance.hpp) via branch-and-
+//         price. HiGHS build only (the master LP needs HiGHS's dual values).
+// Input:  instanceText - the class's line-oriented instance (capacity/
+//         objective/mapper/reducer directives); solverName, optsText unused
+//         (there is only one algorithm for this class, and no runtime
+//         options — objective and affinity live in the instance itself).
+// Output: heap JSON {status, objective, value, schedule:[{reducer, finish,
+//         reads:[{mapper, start}]}]} or an error object. Release with
+//         dls_free.
+char* dls_reducer_read_solve(const char* instanceText, const char* /*solverName*/,
+                             const char* /*optsText*/) {
+    ReducerReadInstance inst;
+    std::string err;
+    std::istringstream in(instanceText ? instanceText : "");
+    if (!readReducerReadInstance(in, inst, err)) return dup(errorJson("parse: " + err));
+    if (!inst.validate(&err)) return dup(errorJson("invalid instance: " + err));
+
+    ReducerReadSolution sol = ReducerReadBpSolver().solve(inst);
+
+    std::ostringstream out;
+    out << "{\"status\":" << json::str(json::statusName(sol.status))
+        << ",\"objective\":" << json::str(inst.objective == ReducerReadObjective::Makespan
+                                          ? "makespan" : "balance")
+        << ",\"value\":" << json::num(sol.makespan)
+        << ",\"nodesExplored\":" << sol.nodesExplored
+        << ",\"schedule\":[";
+    for (std::size_t j = 0; j < sol.schedule.size(); ++j) {
+        const auto& col = sol.schedule[j];
+        out << (j ? "," : "") << "{\"reducer\":" << col.reducer
+            << ",\"finish\":" << json::num(col.finish) << ",\"reads\":[";
+        auto reads = col.starts;
+        std::sort(reads.begin(), reads.end(),
+                 [](const auto& a, const auto& b) { return a.second < b.second; });
+        for (std::size_t k = 0; k < reads.size(); ++k)
+            out << (k ? "," : "") << "{\"mapper\":" << reads[k].first
+                << ",\"start\":" << reads[k].second << "}";
+        out << "]}";
+    }
+    out << "]}";
+    return dup(out.str());
+}
+#endif
 
 // Goal:   release a string returned by any dls_* call.
 void dls_free(char* p) { std::free(p); }

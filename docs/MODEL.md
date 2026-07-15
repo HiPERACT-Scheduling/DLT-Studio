@@ -286,6 +286,18 @@ length is `T = mS + αₘ(Aₘ + γ₀C/r) + t_red`, equivalently `S + α₁A₁
 (the two forms agree exactly — an internal consistency check). The many-reducer
 case here is the "first method" (§4.4.2): single-reducer with `γ₀C` → `γ₀C/r`.
 
+**Bisection-width-limited (exact LP, `MapReduceBwidthSolver`, HiGHS builds
+only).** The closed form above assumes the network serves every reducer's
+read at full rate `C` at once; `--class=mapreduce-bwidth` instead caps
+concurrent read channels at `l` (`bisectionWidth`) — RA-09/09's "third
+method" (§5.2, Eqs. 59-64). Mappers still activate in non-decreasing `Aᵢ`;
+all `r` reducers then read in that same order, starting once both the
+source mapper has finished and a channel is free. `itv(i,j)` (Eq. 59) gives
+the interval in which reducer `j` reads mapper `i`'s output; the LP jointly
+solves `αᵢ` and the interval boundaries `tᵢ`, minimizing the last transfer's
+finish time. Validated at `r=1` (must exactly match the closed form above,
+any `l`) and at `m=1, l=1` (must exactly match `S + A·V + γ₀CV + t_red`).
+
 ## Multilayer applications (`mapreduce/multilayer_solver.hpp`)
 
 Chapter 5 generalizes MapReduce to a mapper layer feeding `R` reducer layers in a
@@ -299,6 +311,72 @@ phases — a feasible schedule / upper bound on the thesis's overlapped optimum:
 by `xLogXConvexPieces`: secant chords of `x·log₂x` at breakpoints `2^y` — convex,
 exact at the breakpoints, over-estimating between — reusable as a processor's
 `computePieces` (above) so any DLS solver can carry an `x·log x` cost.
+
+## Reducer partitioning skew (`mapreduce/mapreduce_skew_instance.hpp`)
+
+MISTA 2013 (Berlińska & Drozdowski): a **homogeneous** system (mapper rate
+`A`, reducer rates `a^sort`/`a^red` shared by all) where the r-way key
+partition is *unbalanced* — some reducers get more of the intermediate data
+than others, unlike every other MapReduce-family model here, which assumes
+an equal `γV/r` share. The instance carries raw partition sizes at `k·r`
+granularity directly (`partitionSizes`, k=1 is the plain r-way case).
+
+Shared per-reducer cost, given its assigned size `p`: `read = max(C, C·min(m,r)/l)/min(m,r) · p`,
+`sort = a^sort·p·log₂p`, `reduce = a^red·p` — the same per-unit-volume rate
+as the balanced baseline (`T* = AV/m + 2Cmrε + max{C,C·min{m,r}/l}γV/min{m,r} + a^sort(γV/r)log₂(γV/r) + a^red·γV/r`),
+generalized to an unequal `p` per reducer; setting all `p = γV/r` reproduces
+that baseline exactly.
+
+- **StaticSkewSolver**: splits keys into `kr` parts, LPT-assigns them to `r`
+  reducers (sort descending, greedily give each to the least-loaded reducer
+  — a min-heap), paying `2·C·kr·mε` (report + assign) plus
+  `a^master·(krm + kr·log₂(kr) + kr·log₂r)` (the LPT decision itself) before
+  any reducer reads.
+- **DynamicSkewSolver** (k=1 only): mapping/reading/sorting proceed as the
+  plain baseline; once every reducer finishes sorting AND at least one
+  finishes reducing, the master halts the `r1` still-busy reducers (3 ×
+  `C·r1·ε` control rounds: halt, report remaining load, notify-to-resume —
+  the paper gives the first two explicitly, this solver extends the same
+  cost to the third), then rebalances. The equalized finish time for
+  folding `n_s` busy senders (only their remaining-data sum `S` matters)
+  into `n_r` idle receivers is `τ = S / (n_s/a^red + n_r/(C+a^red))` —
+  derived here from the same equal-finish-time DLT principle the paper
+  invokes only narratively; `n_s=n_r=1` reproduces its 2-node case. Every
+  idle reducer is always used as a receiver (weakly optimal), so the only
+  real search is over `n_s = 0..r1`, evaluated exhaustively.
+
+Validated: balanced `p_j` ⇒ dynamic result exactly matches the baseline
+formula above, with zero reducers busy at the trigger (nothing to
+rebalance); static at `k=1` exactly matches baseline + the LPT decision cost
+alone (its own report/assign messages are numerically identical to the
+baseline's location round-trip at `k=1`, canceling exactly); a hand-derived
+2-reducer rebalancing example matches the closed form bit-for-bit; static
+never beats the perfectly-balanced lower bound, across a range of `k`
+(not asserted monotonic in `k` — the paper's own results show it isn't).
+
+## Multi-source map-phase scheduling (`mapreduce/multisource_solver.hpp`)
+
+Gu, Liao, Yang & Li (IEEE CSE 2013): a **bipartite** topology, not a star or
+relay tree — `m` storage nodes hold the input `S`, and `n ≥ m` mapper nodes
+(nodes `0..m-1` are the *same* physical nodes as the storage nodes) pull
+from potentially several storage nodes concurrently. Map phase only (the
+paper defers reduce-phase optimization). Node `j`'s finish time:
+`T_j = L_j·t_j + Σ_i R_ij·(t_j + w_ij)` (`L_j` — local share, only for
+`j < m`; `R_ij` — data pulled from storage node `i` into mapper `j`; `t_j` —
+mapper `j`'s compute rate; `w_ij` — transfer rate). Optimum: every node
+finishes simultaneously (classic DLT argument), solved as an LP: a shared
+`T`, one equality row `T_j - T = 0` per node (coefficients read directly off
+the `T_j` formula — a cleaner equivalent of the paper's own pairwise chained
+equations), plus either one total-conservation row `ΣL + ΣR = S` ("Problem
+A", `S_i` derived afterward) or `m` per-node rows `L_i + Σ_j R_ij = S_i`
+("Problem B", `S_i` fixed input).
+
+Validated: `m = n` + homogeneous rates ⇒ exactly `T = S/m·t`, zero
+transfers; free transfer (`w=0`) + heterogeneous rates ⇒ matches the
+classic two-processor DLT equal-finish split by hand; Problem A's own
+derived `S_i`, fed back in as Problem B's fixed supply, reproduces the
+identical makespan and load split bit-for-bit; an extra mapper node (same
+total `S`) never increases the makespan.
 
 ## Linear daisy chain (`topology/linear_chain.hpp`)
 

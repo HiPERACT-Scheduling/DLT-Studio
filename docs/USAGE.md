@@ -521,6 +521,10 @@ contract (see `core/solver_registry.hpp`).
 ./build/bin/dls solve --solver=exact --installments=3 instance.txt
 ./build/bin/dls solve --class=mlsd mlsd.txt           # other problem classes
 ./build/bin/dls solve --class=mapreduce mr.txt
+./build/bin/dls solve --class=mapreduce-bwidth mr.txt  # bisection-width limit, HiGHS build
+./build/bin/dls solve --class=mapreduce-skew-static skew.txt   # reducer skew mitigation
+./build/bin/dls solve --class=mapreduce-skew-dynamic skew.txt  # reducer skew mitigation
+./build/bin/dls solve --class=multisource ms.txt       # multi-source map-phase scheduling, HiGHS build
 ./build/bin/dls solve --class=multilayer ml.txt
 ./build/bin/dls show instance.txt          # re-emit the parsed instance (canonical form)
 ```
@@ -531,7 +535,24 @@ format (see `cli/class_io.hpp`):
   solver with `--solver=mlsd-exact` (default), `mlsd-ga`, or `mlsd-milp`
   (independent exact MILP, HiGHS build, β=0).
 - `--class=mapreduce` — `V`, `startup`, `readrate`, `gamma0`, `reducers`,
-  `reducer_startup`, `reducer_rate`, and `mapper <A>` rows.
+  `reducer_startup`, `reducer_rate`, an optional `bisection <l>` (default 1,
+  ignored by this closed-form solver), and `mapper <A>` rows.
+- `--class=mapreduce-bwidth` (HiGHS build) — the exact same instance format as
+  `--class=mapreduce`, solved instead by an exact LP that respects the
+  `bisection <l>` read-channel limit the closed form ignores (see
+  CHOOSING.md's "Bisection-width-limited MapReduce" section).
+- `--class=mapreduce-skew-static` / `--class=mapreduce-skew-dynamic` — a
+  *homogeneous* MapReduce system with an unbalanced (skewed) reducer
+  partition: `V`, `mappers`, `mapper_rate`, `readrate`, `gamma0`, `epsilon`,
+  `bisection`, `reducers`, `sort_rate`, `reduce_rate`, `master_rate`, `k`,
+  and exactly `k*r` `partition <size>` rows (dynamic requires `k=1`, i.e.
+  exactly `r` rows). See CHOOSING.md's "Reducer partitioning-skew
+  mitigation" section.
+- `--class=multisource` (HiGHS build) — a bipartite topology, not a star:
+  `S`, `m`, `n`, `rate <t>` (n rows), `transfer <i> <j> <w>` rows (i in
+  [0,m), j in [0,n), j != i), and optionally `storage <S_i>` (m rows; if
+  present, fixes the data placement instead of letting the LP derive it).
+  See CHOOSING.md's "Multi-source map-phase scheduling" section.
 - `--class=multilayer` — `V`, `mappers`, `mapper_rate`, `startup`, `readrate`,
   `gamma0`, `bisection`, and `layer <count> <s_red> <a_red> <γ>` rows.
 - `--class=chain` — `V` and `node <A> <C>` rows (chain order; P0's `C` unused).

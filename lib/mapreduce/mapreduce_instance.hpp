@@ -22,6 +22,10 @@
 //
 // Only the mapper computing rates Aᵢ differ between processors; S, C, γ₀, the
 // reducer parameters and r are global. See MODEL.md for the symbol glossary.
+//
+// bisectionWidth (l) additionally caps concurrent mapper-to-reducer read
+// channels; the plain closed-form MapReduceSolver ignores it (it assumes an
+// unconstrained network). Only mapreduce_bwidth_solver.hpp reads it.
 //---------------------------------------------------------------------------
 
 #ifndef DLS_MAPREDUCE_INSTANCE_HPP
@@ -57,6 +61,7 @@ public:
     int    numReducers() const     { return numReducers_; }    // r
     double reducerStartup() const  { return reducerStartup_; } // s_red
     double reducerRate() const     { return reducerRate_; }    // a_red: reducer compute rate
+    int    bisectionWidth() const  { return bisectionWidth_; } // l: concurrent read channels (mapreduce_bwidth_solver.hpp only)
 
     void setStartup(double s)         { startup_ = s; }
     void setReadRate(double c)        { readRate_ = c; }
@@ -64,6 +69,7 @@ public:
     void setNumReducers(int r)        { numReducers_ = r; }
     void setReducerStartup(double s)  { reducerStartup_ = s; }
     void setReducerRate(double a)     { reducerRate_ = a; }
+    void setBisectionWidth(int l)     { bisectionWidth_ = l; }
 
     const std::string& name() const { return name_; }
     void setName(std::string n)     { name_ = std::move(n); }
@@ -83,6 +89,7 @@ public:
         if (startup_ < 0.0 || readRate_ < 0.0 || resultFraction_ < 0.0 ||
             reducerStartup_ < 0.0 || reducerRate_ < 0.0)
             return fail("a global parameter is negative");
+        if (bisectionWidth_ < 1) return fail("bisectionWidth (l) must be >= 1");
         if (error) error->clear();
         return true;
     }
@@ -96,6 +103,7 @@ private:
     int                 numReducers_    = 1;    // r
     double              reducerStartup_ = 0.0;  // s_red
     double              reducerRate_    = 0.0;  // a_red
+    int                 bisectionWidth_ = 1;    // l (ignored by the plain closed-form MapReduceSolver)
     std::string         name_;
 };
 

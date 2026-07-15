@@ -94,6 +94,7 @@ inline bool readMapReduceInstance(std::istream& in, MapReduceInstance& inst, std
         else if (key == "reducers")        { if (!num(ls, x, "reducers")) return false;        inst.setNumReducers(static_cast<int>(x)); }
         else if (key == "reducer_startup") { if (!num(ls, x, "reducer_startup")) return false; inst.setReducerStartup(x); }
         else if (key == "reducer_rate")    { if (!num(ls, x, "reducer_rate")) return false;    inst.setReducerRate(x); }
+        else if (key == "bisection")       { if (!num(ls, x, "bisection")) return false;       inst.setBisectionWidth(static_cast<int>(x)); }
         else if (key == "mapper")          { if (!num(ls, x, "mapper")) return false;          rates.push_back(x); }
         else return fail("unknown directive '" + key + "'");
     }
