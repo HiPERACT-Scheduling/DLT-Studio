@@ -2,7 +2,7 @@
   "name": "dls",
   "version-string": "0.1.0",
   "description": "Divisible Load Scheduling library",
-  "builtin-baseline": "44819aa2a6c10e56065e2b0330e7d6c89d1d2574",
+  "builtin-baseline": "58845ed63eb19aff55e896ea1f5d51f2a0df5b66",
   "dependencies": [
     "highs"
   ]
