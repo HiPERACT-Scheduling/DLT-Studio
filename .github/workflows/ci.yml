@@ -10,34 +10,55 @@ jobs:
     name: dependency-free (CSimplex only)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure
         run: cmake -B build -S .
       - name: Build
         run: cmake --build build
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        # --no-tests=error: fail loudly if test registration ever breaks again,
+        # instead of passing a run that executed zero tests.
+        run: ctest --test-dir build --output-on-failure --no-tests=error
 
   # The optional HiGHS backend, pulled via vcpkg (manifest mode; HiGHS version
-  # pinned by vcpkg.json's builtin-baseline). Uses the vcpkg preinstalled on the
-  # GitHub runner image (VCPKG_INSTALLATION_ROOT).
+  # pinned by lib/vcpkg.json's builtin-baseline). Uses the repo's OWN vcpkg
+  # submodule (lib/vcpkg), not the runner image's preinstalled copy: the
+  # baseline commit must exist in the vcpkg clone, and the runner's copy can
+  # lag behind a freshly bumped baseline (that is exactly what broke 0cf822e).
   with-highs:
     name: with HiGHS (vcpkg)
     runs-on: ubuntu-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+          fetch-depth: 1
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Restore vcpkg binary cache
+        # Keyed on the manifest (its builtin-baseline names the submodule commit),
+        # so a baseline bump rebuilds HiGHS once and later runs reuse the package.
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('lib/vcpkg.json') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+      - name: Bootstrap vcpkg
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          ./lib/vcpkg/bootstrap-vcpkg.sh -disableMetrics
       - name: Configure (HiGHS via vcpkg)
         # The vcpkg manifest (vcpkg.json) lives in lib/, not the repo root, so point
-        # VCPKG_MANIFEST_DIR at it — otherwise the runner's vcpkg finds no manifest,
-        # never installs HiGHS, and find_package(HIGHS) fails at configure time.
+        # VCPKG_MANIFEST_DIR at it — otherwise vcpkg finds no manifest, never
+        # installs HiGHS, and find_package(HIGHS) fails at configure time.
         run: >
-          cmake -B build -S .
+          cmake -B build -S . -G Ninja
           -DDLS_WITH_HIGHS=ON
-          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake
           -DVCPKG_MANIFEST_DIR=${{ github.workspace }}/lib
       - name: Build
         run: cmake --build build
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --no-tests=error

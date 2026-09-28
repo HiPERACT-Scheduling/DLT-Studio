@@ -33,6 +33,10 @@ endif()
 
 project(dls CXX)
 
+# Must be called at the top level too: ctest reads CTestTestfile.cmake from the
+# build ROOT, and without this the umbrella build has none, so `ctest
+# --test-dir build` silently reported "No tests were found" and exited 0.
+enable_testing()
 add_subdirectory(lib)
 if(DLS_WITH_BINDINGS)
   add_subdirectory(bindings)
