@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "DLT Studio: Divisible Load Theory Library"
+abstract: >-
+  C++20 solver portfolio for Divisible Load Theory (DLT) scheduling, with a
+  C-ABI binding for language-agnostic integration. It models the optimal
+  distribution of a large, arbitrarily splittable workload across
+  heterogeneous networked processors and powers the DLT Portal.
+authors:
+  - family-names: Drozdowski
+    given-names: Maciej
+    orcid: "https://orcid.org/0000-0001-9314-529X"
+    affiliation: "Institute of Computing Science, Poznan University of Technology"
+  - family-names: Lawenda
+    given-names: Marcin
+    orcid: "https://orcid.org/0000-0003-4844-3655"
+    affiliation: "Poznan Supercomputing and Networking Center"
+    email: lawenda@man.poznan.pl
+repository-code: "https://github.com/HiPERACT-Scheduling/DLT-Studio"
+url: "https://dlt.psnc.pl"
+license: MIT
+version: 0.1.0
+date-released: "2026-10-11"
+keywords:
+  - divisible load theory
+  - scheduling
+  - hpc
+  - linear programming
+  - c++
